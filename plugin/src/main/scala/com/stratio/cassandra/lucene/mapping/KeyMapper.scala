@@ -19,10 +19,10 @@ import java.nio.ByteBuffer
 
 import com.stratio.cassandra.lucene.mapping.KeyMapper.FIELD_NAME
 import com.stratio.cassandra.lucene.util.ByteBufferUtils
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.filter.ClusteringIndexNamesFilter
 import org.apache.cassandra.db.marshal.CompositeType
 import org.apache.cassandra.db.{Clustering, DecoratedKey}
+import org.apache.cassandra.schema.TableMetadata
 import org.apache.lucene.document.{Field, StringField}
 import org.apache.lucene.index.{IndexableField, Term}
 import org.apache.lucene.search.BooleanClause.Occur.SHOULD
@@ -30,13 +30,14 @@ import org.apache.lucene.search.{BooleanQuery, Query, TermQuery}
 import org.apache.lucene.util.BytesRef
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 /** Class for several primary key mappings between Cassandra and Lucene.
   *
   * @param metadata the indexed table metadata
   * @author Andres de la Pena `adelapena@stratio.com`
   */
-class KeyMapper(metadata: CFMetaData) {
+class KeyMapper(metadata: TableMetadata) {
 
   /** The clustering key comparator */
   val clusteringComparator = metadata.comparator
@@ -45,15 +46,15 @@ class KeyMapper(metadata: CFMetaData) {
   val clusteringType = CompositeType.getInstance(clusteringComparator.subtypes)
 
   /** The type of the primary key, which is composed by token and clustering key types. */
-  val keyType = CompositeType.getInstance(metadata.getKeyValidator, clusteringType)
+  val keyType = CompositeType.getInstance(metadata.partitionKeyType, clusteringType)
 
   /** Returns a [[ByteBuffer]] representing the specified clustering key
     *
     * @param clustering the clustering key
     * @return the byte buffer representing `clustering`
     */
-  private def byteBuffer(clustering: Clustering): ByteBuffer = {
-    (clusteringType.builder /: clustering.getRawValues) (_ add _) build()
+  private def byteBuffer(clustering: Clustering[_]): ByteBuffer = {
+    clusteringType.decompose(clustering.getRawValues)
   }
 
   /** Returns the Lucene [[IndexableField]] representing the specified primary key.
@@ -62,7 +63,7 @@ class KeyMapper(metadata: CFMetaData) {
     * @param clustering the clustering key
     * @return a indexable field
     */
-  def indexableField(key: DecoratedKey, clustering: Clustering): IndexableField = {
+  def indexableField(key: DecoratedKey, clustering: Clustering[_]): IndexableField = {
     new StringField(FIELD_NAME, bytesRef(key, clustering), Field.Store.NO)
   }
 
@@ -72,12 +73,15 @@ class KeyMapper(metadata: CFMetaData) {
     * @param clustering a clustering key
     * @return the Lucene term representing the primary key
     */
-  def term(key: DecoratedKey, clustering: Clustering): Term = {
+  def term(key: DecoratedKey, clustering: Clustering[_]): Term = {
     new Term(FIELD_NAME, bytesRef(key, clustering))
   }
 
-  private def bytesRef(key: DecoratedKey, clustering: Clustering): BytesRef = {
-    ByteBufferUtils.bytesRef(keyType.builder.add(key.getKey).add(byteBuffer(clustering)).build)
+  private def bytesRef(key: DecoratedKey, clustering: Clustering[_]): BytesRef = {
+    val a = new ListBuffer[ByteBuffer]()
+    a += key.getKey
+    a ++= clustering.getBufferArray
+    ByteBufferUtils.bytesRef(ByteBufferUtils.compose(a.toArray : _*))
   }
 
   /** Returns a Lucene [[Query]] to retrieve the row with the specified primary key.
@@ -86,7 +90,7 @@ class KeyMapper(metadata: CFMetaData) {
     * @param clustering a clustering key
     * @return the Lucene query
     */
-  def query(key: DecoratedKey, clustering: Clustering): Query = {
+  def query(key: DecoratedKey, clustering: Clustering[_]): Query = {
     new TermQuery(term(key, clustering))
   }
 
@@ -97,8 +101,7 @@ class KeyMapper(metadata: CFMetaData) {
     * @return the Lucene query
     */
   def query(key: DecoratedKey, filter: ClusteringIndexNamesFilter): Query = {
-    (new BooleanQuery.Builder /: filter.requestedRows.asScala) (
-      (builder, clustering) => builder.add(query(key, clustering), SHOULD)) build()
+    (new BooleanQuery.Builder /: filter.requestedRows.asScala) ((builder, clustering) => builder.add(query(key, clustering), SHOULD)).build()
   }
 
 }

@@ -15,8 +15,8 @@
  */
 package com.stratio.cassandra.lucene.partitioning
 
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.{DecoratedKey, ReadCommand}
+import org.apache.cassandra.schema.TableMetadata
 
 /** [[Partitioner]] with no action, equivalent to just don't partitioning the index.
   *
@@ -40,7 +40,7 @@ object PartitionerOnNone {
 
   /** [[PartitionerOnNone]] builder. */
   case class Builder() extends Partitioner.Builder {
-    override def build(metadata: CFMetaData): PartitionerOnNone = PartitionerOnNone()
+    override def build(metadata: TableMetadata): PartitionerOnNone = PartitionerOnNone()
   }
 
 }

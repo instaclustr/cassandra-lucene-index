@@ -46,7 +46,7 @@ class IndexPagingState(var remaining: Int) {
   private var hasMorePages: Boolean = true
 
   /** The last row positions */
-  private val entries = mutable.LinkedHashMap.empty[(Int, DecoratedKey), Clustering]
+  private val entries = mutable.LinkedHashMap.empty[(Int, DecoratedKey), Clustering[_]]
 
   /** Returns the primary key of the last seen row for the specified read command.
     *
@@ -54,7 +54,7 @@ class IndexPagingState(var remaining: Int) {
     * @return the primary key of the last seen row for `command`
     */
   def forCommand(command: ReadCommand, partitioner: Partitioner)
-  : List[Option[((Int, DecoratedKey), Clustering)]] = {
+  : List[Option[((Int, DecoratedKey), Clustering[_])]] = {
     (0 until partitioner.numPartitions).map(i => {
       command match {
         case c: SinglePartitionReadCommand =>
@@ -73,7 +73,7 @@ class IndexPagingState(var remaining: Int) {
     command.rowFilter.getExpressions.asScala.find(_.isCustom).foreach(return _)
 
     // Try with dummy column
-    val cfs = Keyspace.open(command.metadata.ksName).getColumnFamilyStore(command.metadata.cfName)
+    val cfs = Keyspace.open(command.metadata.keyspace).getColumnFamilyStore(command.metadata.name)
     for (expr <- command.rowFilter.getExpressions.asScala) {
       for (index <- cfs.indexManager.listIndexes.asScala) {
         if (index.isInstanceOf[Index] && index.supportsExpression(expr.column, expr.operator))
@@ -91,7 +91,7 @@ class IndexPagingState(var remaining: Int) {
   @throws[ReflectiveOperationException]
   def rewrite(query: ReadQuery): Unit = query match {
     case group: SinglePartitionReadCommand.Group =>
-      group.commands.forEach(rewrite)
+      group.queries.forEach(rewrite)
     case read: ReadCommand =>
       val expression = indexExpression(read)
       val oldValue = expressionValueField.get(expression).asInstanceOf[ByteBuffer]
@@ -139,7 +139,7 @@ class IndexPagingState(var remaining: Int) {
     }
     partitions.close()
     hasMorePages = remaining > 0 && count >= group.limits.count
-    new SimplePartitionIterator(rowIterators)
+    new SimplePartitionIterator(rowIterators.toSeq)
   }
 
   private def update(
@@ -175,7 +175,7 @@ class IndexPagingState(var remaining: Int) {
     partitions.close()
 
     hasMorePages = remaining > 0 && count >= command.limits.count
-    new SimplePartitionIterator(rowIterators)
+    new SimplePartitionIterator(rowIterators.toSeq)
   }
 
   /** Returns a CQL [[PagingState]] containing this Lucene paging state.
@@ -202,7 +202,7 @@ class IndexPagingState(var remaining: Int) {
     */
   def toByteBuffer: ByteBuffer = {
     val entryValues = entries.map { case ((partition, key), clustering) =>
-      val clusteringValues: Array[ByteBuffer] = clustering.getRawValues
+      val clusteringValues: Array[ByteBuffer] = clustering.getRawValues.asInstanceOf[Array[ByteBuffer]]
       val values = new Array[ByteBuffer](2 + clusteringValues.length)
       values(0) = Int32Type.instance.decompose(partition)
       values(1) = key.getKey

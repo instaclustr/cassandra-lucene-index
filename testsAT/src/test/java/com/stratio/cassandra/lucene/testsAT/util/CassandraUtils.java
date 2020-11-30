@@ -174,14 +174,16 @@ public class CassandraUtils {
 
     private CassandraUtils waitForIndexBuilt() {
         logger.debug("Waiting for the index to be created...");
+
         while (!isIndexBuilt()) {
             try {
-                TimeUnit.MILLISECONDS.sleep(50);
+                TimeUnit.MILLISECONDS.sleep(5000);
             } catch (InterruptedException e) {
                 throw new RuntimeException("Interrupted while waiting for index building", e);
             }
         }
         logger.debug("Index ready to rock!");
+
         return this;
     }
 

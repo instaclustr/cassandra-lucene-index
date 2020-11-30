@@ -19,8 +19,9 @@ import java.nio.ByteBuffer
 
 import com.stratio.cassandra.lucene.mapping.PartitionMapper._
 import com.stratio.cassandra.lucene.util.ByteBufferUtils
-import org.apache.cassandra.config.{CFMetaData, DatabaseDescriptor}
+import org.apache.cassandra.config.DatabaseDescriptor
 import org.apache.cassandra.db.DecoratedKey
+import org.apache.cassandra.schema.TableMetadata
 import org.apache.lucene.document.{Document, Field, FieldType}
 import org.apache.lucene.index.{DocValuesType, IndexOptions, IndexableField, Term}
 import org.apache.lucene.search.FieldComparator.TermValComparator
@@ -34,10 +35,10 @@ import scala.collection.JavaConverters._
   * @param metadata the indexed table metadata
   * @author Andres de la Pena `adelapena@stratio.com`
   */
-class PartitionMapper(metadata: CFMetaData) {
+class PartitionMapper(metadata: TableMetadata) {
 
   val partitioner = DatabaseDescriptor.getPartitioner
-  val validator = metadata.getKeyValidator
+  val validator = metadata.partitionKeyType
   val partitionKeyColumns = metadata.partitionKeyColumns.asScala
 
   /** Returns the Lucene indexable field representing to the specified partition key.
@@ -131,14 +132,15 @@ object PartitionMapper {
   * @author Andres de la Pena `adelapena@stratio.com`
   */
 class PartitionSort(mapper: PartitionMapper) extends SortField(
-  FIELD_NAME, (field, hits, _, _) => new TermValComparator(hits, field, false) {
-    override def compareValues(t1: BytesRef, t2: BytesRef): Int = {
-      val bb1 = ByteBufferUtils.byteBuffer(t1)
-      val bb2 = ByteBufferUtils.byteBuffer(t2)
-      mapper.validator.compare(bb1, bb2)
+  FIELD_NAME, (fieldname: String, numHits: Int, sortPos: Int, reversed: Boolean) => {
+    new TermValComparator(numHits, fieldname, false) {
+      override def compareValues(t1: BytesRef, t2: BytesRef): Int = {
+        val bb1 = ByteBufferUtils.byteBuffer(t1)
+        val bb2 = ByteBufferUtils.byteBuffer(t2)
+        mapper.validator.compare(bb1, bb2)
+      }
     }
   }) {
-
   /** @inheritdoc **/
   override def toString: String = "<partition>"
 
@@ -147,5 +149,5 @@ class PartitionSort(mapper: PartitionMapper) extends SortField(
     case _: PartitionSort => true
     case _ => false
   }
-
 }
+

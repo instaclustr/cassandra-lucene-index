@@ -20,10 +20,10 @@ import java.nio.ByteBuffer
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.stratio.cassandra.lucene.IndexException
 import com.stratio.cassandra.lucene.util.ByteBufferUtils
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.PartitionPosition.Kind.ROW_KEY
 import org.apache.cassandra.db._
 import org.apache.cassandra.db.marshal.{AbstractType, UTF8Type}
+import org.apache.cassandra.schema.TableMetadata
 import org.apache.cassandra.utils.MurmurHash
 import org.apache.commons.lang3.StringUtils
 
@@ -108,13 +108,13 @@ object PartitionerOnColumn {
       @JsonProperty("partitions") partitions: Int,
       @JsonProperty("column") column: String)
     extends Partitioner.Builder {
-    override def build(metadata: CFMetaData): PartitionerOnColumn = {
+    override def build(metadata: TableMetadata): PartitionerOnColumn = {
       val name = UTF8Type.instance.decompose(column)
-      metadata.getColumnDefinition(name) match {
+      metadata.getColumn(name) match {
         case null =>
           throw new IndexException(s"Partitioner's column '$column' not found in table schema")
         case d if d.isPartitionKey =>
-          PartitionerOnColumn(partitions, column, d.position, metadata.getKeyValidator)
+          PartitionerOnColumn(partitions, column, d.position(), metadata.partitionKeyType)
         case _ =>
           throw new IndexException(s"Partitioner's column '$column' is not part of partition key")
       }

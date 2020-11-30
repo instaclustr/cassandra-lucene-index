@@ -62,7 +62,7 @@ class IndexServiceWide(table: ColumnFamilyStore, index: IndexMetadata)
     * @param document a document containing the clustering key to be get
     * @return the clustering key contained in `document`
     */
-  def clustering(document: Document): Clustering = {
+  def clustering(document: Document): Clustering[_] = {
     clusteringMapper.clustering(document)
   }
 
@@ -76,8 +76,7 @@ class IndexServiceWide(table: ColumnFamilyStore, index: IndexMetadata)
   }
 
   /** @inheritdoc */
-  override def keyIndexableFields(key: DecoratedKey, clustering: Clustering)
-  : List[IndexableField] = {
+  override def keyIndexableFields(key: DecoratedKey, clustering: Clustering[_]): List[IndexableField] = {
     val fields = mutable.ListBuffer.empty[IndexableField]
     fields += tokenMapper.indexableField(key)
     fields += partitionMapper.indexableField(key)
@@ -87,7 +86,7 @@ class IndexServiceWide(table: ColumnFamilyStore, index: IndexMetadata)
   }
 
   /** @inheritdoc */
-  def term(key: DecoratedKey, clustering: Clustering): Term = {
+  def term(key: DecoratedKey, clustering: Clustering[_]): Term = {
     keyMapper.term(key, clustering)
   }
 
@@ -111,8 +110,8 @@ class IndexServiceWide(table: ColumnFamilyStore, index: IndexMetadata)
 
   def query(
       position: PartitionPosition,
-      start: Option[ClusteringPrefix],
-      stop: Option[ClusteringPrefix]): Query = {
+      start: Option[ClusteringPrefix[_]],
+      stop: Option[ClusteringPrefix[_]]): Query = {
     if (start.isEmpty && stop.isEmpty) return query(position)
     new BooleanQuery.Builder()
       .add(query(position), FILTER)
@@ -160,7 +159,7 @@ class IndexServiceWide(table: ColumnFamilyStore, index: IndexMetadata)
   }
 
   /** @inheritdoc */
-  override def after(key: DecoratedKey, clustering: Clustering): Term = {
+  override def after(key: DecoratedKey, clustering: Clustering[_]): Term = {
     keyMapper.term(key, clustering)
   }
 

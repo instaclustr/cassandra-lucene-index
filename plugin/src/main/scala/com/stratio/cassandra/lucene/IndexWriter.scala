@@ -44,36 +44,36 @@ abstract class IndexWriter(
 
   /** @inheritdoc */
   override def begin() {
-    logger.trace(s"Begin transaction $transactionType")
+    logger.info(s"Begin transaction $transactionType")
   }
 
   /** @inheritdoc */
   override def partitionDelete(deletionTime: DeletionTime) {
-    logger.trace(s"Delete partition during $transactionType: $deletionTime")
+    logger.info(s"Delete partition during $transactionType: $deletionTime")
     delete()
   }
 
   /** @inheritdoc */
   override def rangeTombstone(tombstone: RangeTombstone) {
-    logger.trace(s"Range tombstone during $transactionType: $tombstone")
+    logger.info(s"Range tombstone during $transactionType: $tombstone")
     delete(tombstone)
   }
 
   /** @inheritdoc */
   override def insertRow(row: Row): Unit = {
-    logger.trace(s"Insert rows during $transactionType: $row")
+    logger.info(s"Insert rows during $transactionType: $row")
     tryIndex(row)
   }
 
   /** @inheritdoc */
   override def updateRow(oldRowData: Row, newRowData: Row): Unit = {
-    logger.trace(s"Update row during $transactionType: $oldRowData TO $newRowData")
+    logger.info(s"Update row during $transactionType: $oldRowData TO $newRowData")
     tryIndex(newRowData)
   }
 
   /** @inheritdoc */
   override def removeRow(row: Row): Unit = {
-    logger.trace(s"Remove row during $transactionType: $row")
+    logger.info(s"Remove row during $transactionType: $row")
     tryIndex(row)
   }
 

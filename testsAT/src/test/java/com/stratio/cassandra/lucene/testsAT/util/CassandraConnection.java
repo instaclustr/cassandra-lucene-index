@@ -48,7 +48,7 @@ public class CassandraConnection {
     private static void connect(int connectionRetries, int conectionDelay) throws InterruptedException {
         if (connectionRetries > 0) {
             try {
-                logger.debug("Connecting to: " + HOST);
+                logger.info("Connecting to: " + HOST);
                 cluster = establishConnection();
             } catch (Exception runtimeException) {
                 logger.debug("Error connecting to : " + HOST + " with error: "+ runtimeException.getLocalizedMessage());

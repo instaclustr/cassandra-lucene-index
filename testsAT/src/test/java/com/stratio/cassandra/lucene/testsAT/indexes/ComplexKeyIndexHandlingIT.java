@@ -15,8 +15,10 @@
  */
 package com.stratio.cassandra.lucene.testsAT.indexes;
 
+import com.stratio.cassandra.lucene.builder.index.Partitioner;
 import com.stratio.cassandra.lucene.testsAT.BaseIT;
 import com.stratio.cassandra.lucene.testsAT.util.CassandraUtils;
+import com.stratio.cassandra.lucene.testsAT.util.CassandraUtilsSelect;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,6 +37,7 @@ public class ComplexKeyIndexHandlingIT extends BaseIT {
     public void before() {
         utils = CassandraUtils.builder("complex_key_index_handling")
                               .withPartitionKey("integer_1", "ascii_1")
+                              .withPartitioner(new Partitioner.OnToken(100))
                               .withClusteringKey("double_1")
                               .withColumn("ascii_1", "ascii")
                               .withColumn("bigint_1", "bigint")
@@ -65,12 +68,13 @@ public class ComplexKeyIndexHandlingIT extends BaseIT {
 
     @Test
     public void testCreateIndexAfterInsertions() {
-        utils.insert(data1, data2, data3, data4, data6, data7, data8, data9, data10)
-             .insert(data11, data12, data13, data14, data15, data16, data17, data18, data19, data20)
-             .createIndex()
-             .refresh()
-             .filter(wildcard("ascii_1", "*"))
-             .check(19);
+        CassandraUtilsSelect inserts = utils.insert(data1, data2, data3, data4, data6, data7, data8, data9, data10)
+            .insert(data11, data12, data13, data14, data15, data16, data17, data18, data19, data20)
+            .createIndex()
+            .refresh()
+            .filter(wildcard("ascii_1", "*"));
+
+        inserts.check(19);
     }
 
     @Test

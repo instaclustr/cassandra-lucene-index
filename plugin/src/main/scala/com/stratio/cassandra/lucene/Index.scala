@@ -22,19 +22,22 @@ import java.{util => java}
 
 import com.stratio.cassandra.lucene.search.Search
 import com.stratio.cassandra.lucene.util.Logging
-import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
 import org.apache.cassandra.cql3.Operator
 import org.apache.cassandra.db.SinglePartitionReadCommand.Group
 import org.apache.cassandra.db._
+import org.apache.cassandra.db.compaction.CompactionManager
 import org.apache.cassandra.db.filter.RowFilter
+import org.apache.cassandra.db.lifecycle.{SSTableSet, View}
 import org.apache.cassandra.db.marshal.{AbstractType, UTF8Type}
 import org.apache.cassandra.db.partitions._
 import org.apache.cassandra.exceptions.{ConfigurationException, InvalidRequestException}
 import org.apache.cassandra.index.Index.{Indexer, Searcher}
+import org.apache.cassandra.index.internal.CollatedViewIndexBuilder
 import org.apache.cassandra.index.transactions.IndexTransaction
 import org.apache.cassandra.index.{IndexRegistry, Index => CassandraIndex}
-import org.apache.cassandra.schema.IndexMetadata
-import org.apache.cassandra.utils.concurrent.OpOrder
+import org.apache.cassandra.io.sstable.ReducingKeyIterator
+import org.apache.cassandra.schema.{ColumnMetadata, IndexMetadata, TableMetadata}
+import org.apache.cassandra.utils.FBUtilities
 
 
 /** [[CassandraIndex]] that uses Apache Lucene as backend. It allows, among
@@ -65,20 +68,46 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
     * @return a task to perform any necessary initialization work
     */
   override def getInitializationTask: Callable[_] = {
-    if (table.isEmpty || SystemKeyspace.isIndexBuilt(table.keyspace.getName, indexMetadata.name)) {
-      logger.info(s"Index $name doesn't need (re)building")
-      null
-    } else {
-      logger.info(s"Index $name needs (re)building")
-      getBuildIndexTask
+    if (isBuilt || table.isEmpty) {
+      return null
     }
+
+    getBuildIndexTask()
   }
 
-  private[this] def getBuildIndexTask: Callable[_] = () => {
-    table.forceBlockingFlush()
-    service.truncate()
-    table.indexManager.buildIndexBlocking(Index.this)
-  }
+  private[this] def getBuildIndexTask(): Callable[Unit] =
+    new Callable[Unit] {
+      override def call(): Unit = {
+        table.forceBlockingFlush
+
+        try {
+          val viewFragment = table.selectAndReference(View.selectFunction(SSTableSet.CANONICAL))
+          val sstables = viewFragment.refs
+
+          try {
+            if (sstables.isEmpty) {
+              logger.info("No SSTable data for {}.{} to build index {} from, marking empty index as built",
+                          table.metadata.keyspace, table.metadata.name, indexMetadata.name)
+              return
+            }
+            logger.info("Submitting index build of {}", table.name)
+            val builder = new CollatedViewIndexBuilder(table,
+                                                       Collections.singleton(Index.this),
+                                                       new ReducingKeyIterator(sstables),
+                                                       java.Collections.unmodifiableCollection(sstables))
+
+            val future = CompactionManager.instance.submitIndexBuild(builder)
+            FBUtilities.waitOnFuture(future)
+          } finally {
+            if (viewFragment != null) viewFragment.close()
+            if (sstables != null) sstables.close()
+          }
+        }
+        logger.info("Index build of {} complete", indexMetadata.name)
+      }
+    }
+
+  private def isBuilt = SystemKeyspace.isIndexBuilt(table.keyspace.getName, indexMetadata.name)
 
   /** Returns the IndexMetadata which configures and defines the index instance. This should be the
     * same object passed as the argument to setIndexMetadata.
@@ -174,7 +203,7 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
     * @return true if the index depends on the supplied column being present; false if the column
     *         may be safely dropped or modified without adversely affecting the index
     */
-  override def dependsOn(column: ColumnDefinition): Boolean = {
+  override def dependsOn(column: ColumnMetadata): Boolean = {
     // TODO: Could return true only for key and/or mapped columns?
     logger.trace(s"Asking if the index depends on column $column")
     service.dependsOn(column)
@@ -188,7 +217,7 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
     * @param operator the operator of a search query predicate
     * @return true if this index is capable of supporting such expressions, false otherwise
     */
-  override def supportsExpression(column: ColumnDefinition, operator: Operator): Boolean = {
+  override def supportsExpression(column: ColumnMetadata, operator: Operator): Boolean = {
     logger.trace(s"Asking if the index supports the expression $column $operator")
     service.expressionMapper.supports(column, operator)
   }
@@ -259,21 +288,21 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
     *                        range and row deletions, but the indexer is guaranteed to not get any
     *                        cells for a column that is not part of columns.
     * @param nowInSec        current time of the update operation
-    * @param opGroup         operation group spanning the update operation
     * @param transactionType indicates what kind of update is being performed on the base data i.e.
     *                        a write time insert/update/delete or the result of compaction
     * @return the newly created indexer or `null` if the index is not interested by the update (this
     *         could be because the index doesn't care about that particular partition, doesn't care
     *         about that type of transaction, ...).
     */
-  override def indexerFor(
-      key: DecoratedKey,
-      columns: PartitionColumns,
-      nowInSec: Int,
-      opGroup: OpOrder.Group,
-      transactionType: IndexTransaction.Type): Indexer = {
-    service.writer(key, nowInSec, opGroup, transactionType)
+  override def indexerFor(key: DecoratedKey,
+                          columns: RegularAndStaticColumns,
+                          nowInSec: Int,
+                          ctx: WriteContext,
+                          transactionType: IndexTransaction.Type): Indexer = {
+    service.writer(key, nowInSec, ctx.asInstanceOf[CassandraWriteContext].getGroup, transactionType)
   }
+
+  override def supportsReplicaFilteringProtection(): Boolean = super.supportsReplicaFilteringProtection()
 
   /** Return a function which performs post processing on the results of a partition range read
     * command. In future, this may be used as a generalized mechanism for transforming results on
@@ -333,7 +362,6 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
         throw new InvalidRequestException(e.getMessage)
     }
   }
-
 }
 
 /** Companion object for [[Index]]. */
@@ -347,8 +375,8 @@ object Index extends Logging {
     * @throws ConfigurationException if the options are not valid
     */
   def validateOptions(
-      options: java.Map[String, String],
-      metadata: CFMetaData): java.Map[String, String] = {
+                       options: java.Map[String, String],
+                       metadata: TableMetadata): java.Map[String, String] = {
     logger.debug("Validating Lucene index options")
     try {
       IndexOptions.validate(options, metadata)

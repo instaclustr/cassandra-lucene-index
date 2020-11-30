@@ -18,10 +18,10 @@ package com.stratio.cassandra.lucene.partitioning
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.stratio.cassandra.lucene.IndexException
 import com.stratio.cassandra.lucene.util.Logging
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db._
 import org.apache.cassandra.dht.Murmur3Partitioner.LongToken
 import org.apache.cassandra.dht.{Bounds, Token}
+import org.apache.cassandra.schema.TableMetadata
 import org.apache.cassandra.service.StorageService
 
 import scala.collection.JavaConverters._
@@ -118,7 +118,7 @@ object PartitionerOnVirtualNode {
 
   /** [[PartitionerOnVirtualNode]] builder. */
   case class Builder(@JsonProperty("vnodes_per_partition") vnodes_per_partition: Int) extends Partitioner.Builder {
-    override def build(metadata: CFMetaData): PartitionerOnVirtualNode = PartitionerOnVirtualNode(
+    override def build(metadata: TableMetadata): PartitionerOnVirtualNode = PartitionerOnVirtualNode(
       vnodes_per_partition,
       StorageService.instance.getLocalTokens.asScala.toList.sorted)
   }

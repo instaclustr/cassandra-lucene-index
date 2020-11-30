@@ -16,19 +16,19 @@
 package com.stratio.cassandra.lucene
 
 import java.lang.management.ManagementFactory
-import javax.management.{JMException, ObjectName}
 
+import javax.management.{JMException, ObjectName}
 import com.stratio.cassandra.lucene.index.{DocumentIterator, PartitionedIndex}
 import com.stratio.cassandra.lucene.mapping._
 import com.stratio.cassandra.lucene.search.Search
 import com.stratio.cassandra.lucene.util._
-import org.apache.cassandra.config.{ColumnDefinition, DatabaseDescriptor}
+import org.apache.cassandra.config.DatabaseDescriptor
 import org.apache.cassandra.db._
 import org.apache.cassandra.db.filter._
 import org.apache.cassandra.db.partitions._
 import org.apache.cassandra.db.rows._
 import org.apache.cassandra.index.transactions.IndexTransaction
-import org.apache.cassandra.schema.IndexMetadata
+import org.apache.cassandra.schema.{ColumnMetadata, IndexMetadata}
 import org.apache.cassandra.utils.FBUtilities
 import org.apache.cassandra.utils.concurrent.OpOrder
 import org.apache.lucene.document.Document
@@ -48,9 +48,9 @@ abstract class IndexService(
     val table: ColumnFamilyStore,
     val indexMetadata: IndexMetadata) extends IndexServiceMBean with Logging with Tracing {
 
-  val metadata = table.metadata
-  val ksName = metadata.ksName
-  val cfName = metadata.cfName
+  val metadata = table.metadata.get()
+  val ksName = metadata.keyspace
+  val cfName = metadata.name
   val idxName = indexMetadata.name
   val qualifiedName = s"$ksName.$cfName.$idxName"
 
@@ -59,7 +59,7 @@ abstract class IndexService(
 
   // Setup schema
   val schema = options.schema
-  val regulars = metadata.partitionColumns.regulars.asScala.toSet
+  val regulars = metadata.partitionKeyColumns().asScala.filter(x => x.isRegular).toSet
   val mappedRegulars = regulars.map(_.name.toString).filter(schema.mappedCells.contains)
   val mapsMultiCell = regulars.exists(x => x.`type`.isMultiCell && schema.mapsCell(x.name.toString))
   val mapsPrimaryKey = metadata.primaryKeyColumns().asScala.exists(x => schema.mapsCell(x.name.toString))
@@ -125,14 +125,14 @@ abstract class IndexService(
     */
   def fieldsToLoad: java.util.Set[String]
 
-  def keyIndexableFields(key: DecoratedKey, clustering: Clustering): List[IndexableField]
+  def keyIndexableFields(key: DecoratedKey, clustering: Clustering[_]): List[IndexableField]
 
   /** Returns if the specified column definition is mapped by this index.
     *
     * @param columnDef a column definition
     * @return `true` if the column is mapped, `false` otherwise
     */
-  def dependsOn(columnDef: ColumnDefinition): Boolean = {
+  def dependsOn(columnDef: ColumnMetadata): Boolean = {
     schema.mapsCell(columnDef.name.toString)
   }
 
@@ -151,7 +151,7 @@ abstract class IndexService(
     * @param clustering the clustering key
     * @return a Lucene identifying term
     */
-  def term(key: DecoratedKey, clustering: Clustering): Term
+  def term(key: DecoratedKey, clustering: Clustering[_]): Term
 
   /** Returns a Lucene term identifying documents representing all the row's which are in the
     * partition the specified [[DecoratedKey]].
@@ -235,22 +235,33 @@ abstract class IndexService(
     * @param nowInSec now in seconds
     */
   def upsert(key: DecoratedKey, row: Row, nowInSec: Int) {
-    if (!excludedDataCenter)
+    if (!excludedDataCenter) {
       queue.submitAsynchronous(key, () => {
-        val partition = partitioner.partition(key)
-        val clustering = row.clustering()
-        val term = this.term(key, clustering)
-        val columns = columnsMapper.columns(key, row, nowInSec)
-        val fields = schema.indexableFields(columns)
-        if (fields.isEmpty) {
-          lucene.delete(partition, term)
-        } else {
-          val doc = new Document
-          keyIndexableFields(key, clustering).foreach(doc.add)
-          fields.forEach(doc add _)
-          lucene.upsert(partition, term, doc)
+        synchronized {
+          val partition = partitioner.partition(key)
+          val clustering = row.clustering()
+          val term = this.term(key, clustering)
+          try {
+            val columns = columnsMapper.columns(key, row, nowInSec)
+            val fields = schema.indexableFields(columns)
+            if (fields.isEmpty) {
+              lucene.delete(partition, term)
+            } else {
+              val doc = new Document
+              keyIndexableFields(key, clustering).foreach(doc.add)
+              fields.forEach(doc add _)
+              lucene.upsert(partition, term, doc)
+            }
+          } catch {
+            case ex: Throwable => {
+              ex.printStackTrace()
+              logger.error("error in indexing: ", ex)
+              throw ex
+            }
+          }
         }
       })
+    }
   }
 
   /** Deletes the partition identified by the specified key.
@@ -258,7 +269,7 @@ abstract class IndexService(
     * @param key        the partition key
     * @param clustering the clustering key
     */
-  def delete(key: DecoratedKey, clustering: Clustering) {
+  def delete(key: DecoratedKey, clustering: Clustering[_]) {
     if (!excludedDataCenter)
       queue.submitAsynchronous(key, () => {
         val partition = partitioner.partition(key)
@@ -361,7 +372,7 @@ abstract class IndexService(
     * @param clustering the clustering key
     * @return the query to retrieve the row
     */
-  def after(key: DecoratedKey, clustering: Clustering): Term
+  def after(key: DecoratedKey, clustering: Clustering[_]): Term
 
   /** Returns the Lucene sort with the specified search sorting requirements followed by the
     * Cassandra's natural ordering based on partitioning token and cell name.

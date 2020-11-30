@@ -19,10 +19,11 @@ import java.nio.ByteBuffer
 
 import com.stratio.cassandra.lucene.column.{Column, Columns}
 import com.stratio.cassandra.lucene.schema.Schema
-import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
+import com.stratio.cassandra.lucene.util.Logging
 import org.apache.cassandra.db.marshal._
 import org.apache.cassandra.db.rows.{Cell, ComplexColumnData, Row}
 import org.apache.cassandra.db.{Clustering, DecoratedKey}
+import org.apache.cassandra.schema.{ColumnMetadata, TableMetadata}
 import org.apache.cassandra.serializers.CollectionSerializer
 import org.apache.cassandra.transport.ProtocolVersion
 import org.apache.cassandra.utils.ByteBufferUtil
@@ -35,14 +36,14 @@ import scala.collection.JavaConverters._
   * @param metadata a table metadata
   * @author Andres de la Pena `adelapena@stratio.com`
   */
-class ColumnsMapper(schema: Schema, metadata: CFMetaData) {
+class ColumnsMapper(schema: Schema, metadata: TableMetadata) extends Logging {
 
   val mappedCells: Set[String] = schema.mappedCells().asScala.toSet
 
-  val keyColumns: List[ColumnDefinition] = metadata.partitionKeyColumns.asScala
+  val keyColumns: List[ColumnMetadata] = metadata.partitionKeyColumns.asScala
     .filter(definition => mappedCells.contains(definition.name.toString)).toList
 
-  val clusteringColumns: List[ColumnDefinition] = metadata.clusteringColumns.asScala
+  val clusteringColumns: List[ColumnMetadata] = metadata.clusteringColumns.asScala
     .filter(definition => mappedCells.contains(definition.name.toString)).toList
 
   /** Returns the mapped, not deleted at the specified time in seconds and not null [[Columns]]
@@ -58,7 +59,7 @@ class ColumnsMapper(schema: Schema, metadata: CFMetaData) {
 
   /** Returns the mapped [[Columns]] contained in the specified partition key. */
   private[mapping] def columns(key: DecoratedKey): Columns = {
-    val components = metadata.getKeyValidator match {
+    val components = metadata.partitionKeyType match {
       case c: CompositeType => c.split(key.getKey)
       case _ => Array[ByteBuffer](key.getKey)
     }
@@ -71,9 +72,11 @@ class ColumnsMapper(schema: Schema, metadata: CFMetaData) {
   }
 
   /** Returns the mapped [[Columns]] contained in the specified clustering key. */
-  private[mapping] def columns(clustering: Clustering): Columns = {
-    (clusteringColumns :\ Columns()) ((definition, columns_s) => {
-       columns_s ++ ColumnsMapper.columns(Column(definition.name.toString), definition.`type`, clustering.get(definition.position))
+  private[mapping] def columns(clustering: Clustering[_]): Columns = {
+    (clusteringColumns foldRight  Columns()) ((definition, columns_s) => {
+      columns_s ++ ColumnsMapper.columns(Column(definition.name.toString),
+                                         definition.`type`,
+                                         clustering.getBufferArray()(definition.position()))
     })
   }
 
@@ -85,12 +88,12 @@ class ColumnsMapper(schema: Schema, metadata: CFMetaData) {
     */
   private[mapping] def columns(row: Row, now: Int): Columns = {
     (row.columns.asScala :\ Columns()) ((definition, columns) =>
-        if (definition.isComplex) {
-          this.columns(row.getComplexColumnData(definition), now) ++ columns
-        } else {
-          this.columns(row.getCell(definition), now) ++ columns
-        }
-    )
+                                          if (definition.isComplex) {
+                                            this.columns(row.getComplexColumnData(definition), now) ++ columns
+                                          } else {
+                                            this.columns(row.getCell(definition).asInstanceOf[Cell[ByteBuffer]], now) ++ columns
+                                          }
+                                        )
   }
 
   /** Returns the mapped, not deleted at the specified time in seconds and not null [[Columns]]
@@ -101,7 +104,7 @@ class ColumnsMapper(schema: Schema, metadata: CFMetaData) {
     */
   private[mapping] def columns(complexColumnData: ComplexColumnData, now: Int): Columns = {
     (complexColumnData.asScala :\ Columns()) ((cell, columns) => {
-      this.columns(cell, now) ++ columns
+      this.columns(cell.asInstanceOf[Cell[ByteBuffer]], now) ++ columns
     })
   }
 
@@ -111,11 +114,11 @@ class ColumnsMapper(schema: Schema, metadata: CFMetaData) {
     * @param cell a cell
     * @param now  now in seconds
     */
-  private[mapping] def columns(cell: Cell, now: Int): Columns =
+  private[mapping] def columns(cell: Cell[ByteBuffer], now: Int): Columns =
     if (cell.isTombstone
       || cell.localDeletionTime <= now
       || !mappedCells.contains(cell.column.name.toString))
-      Columns.empty
+      Columns.empty()
     else ColumnsMapper.columns(cell)
 
 }
@@ -127,11 +130,11 @@ object ColumnsMapper {
     *
     * @param cell a cell
     */
-  private[mapping] def columns(cell: Cell): Columns = {
+  private[mapping] def columns(cell: Cell[ByteBuffer]): Columns = {
     if (cell == null) return Columns()
     val name = cell.column.name.toString
     val comparator = cell.column.`type`
-    val value = cell.value
+
     val column = Column(name)
     comparator match {
       case setType: SetType[_] if !setType.isFrozenCollection =>
@@ -139,29 +142,29 @@ object ColumnsMapper {
         val itemValue = cell.path.get(0)
         columns(column, itemComparator, itemValue)
       case listType: ListType[_] if !listType.isFrozenCollection =>
-        val itemComparator = listType.valueComparator
-        columns(column, itemComparator, value)
+        val itemComparator = listType.valueComparator()
+        columns(column, itemComparator, cell.buffer())
       case mapType: MapType[_, _] if !mapType.isFrozenCollection =>
         val valueType = mapType.valueComparator
         val keyValue = cell.path.get(0)
         val keyType = mapType.nameComparator
         val keyName = keyType.compose(keyValue).toString
         val keyColumn = column.withUDTName(Column.MAP_KEY_SUFFIX).withValue(keyValue, keyType)
-        val valueColumn = columns(column.withUDTName(Column.MAP_VALUE_SUFFIX), valueType, value)
-        val entryColumn = columns(column.withMapName(keyName), valueType, value)
+        val valueColumn = columns(column.withUDTName(Column.MAP_VALUE_SUFFIX), valueType, cell.buffer())
+        val entryColumn = columns(column.withMapName(keyName), valueType, cell.buffer())
         keyColumn + valueColumn ++ entryColumn
       case userType: UserType =>
         val cellPath = cell.path
         if (cellPath == null) {
-          columns(column, comparator, value)
+          columns(column, comparator, cell.buffer())
         } else {
           val position = ByteBufferUtil.toShort(cellPath.get(0))
           val name = userType.fieldNameAsString(position)
           val typo = userType.`type`(position)
-          columns(column.withUDTName(name), typo, value)
+          columns(column.withUDTName(name), typo, cellPath.get(0))
         }
       case _ =>
-        columns(column, comparator, value)
+        columns(column, comparator, cell.buffer())
     }
   }
 
@@ -188,7 +191,7 @@ object ColumnsMapper {
   private[mapping] def columns(column: Column, list: ListType[_], value: ByteBuffer): Columns = {
     val valueType = list.valueComparator
     val bb = ByteBufferUtil.clone(value) // CollectionSerializer read functions are impure
-    ((0 until frozenCollectionSize(bb)) :\ Columns()) ((_, columns) => {
+    ((0 until frozenCollectionSize(bb)) foldRight Columns()) ((_, columns) => {
       val itemValue = frozenCollectionValue(bb)
       this.columns(column, valueType, itemValue) ++ columns
     })
@@ -198,7 +201,7 @@ object ColumnsMapper {
     val itemKeysType = map.nameComparator
     val itemValuesType = map.valueComparator
     val bb = ByteBufferUtil.clone(value) // CollectionSerializer read functions are impure
-    ((0 until frozenCollectionSize(bb)) :\ Columns()) ((_, columns) => {
+    ((0 until frozenCollectionSize(bb)) foldRight Columns()) ((_, columns) => {
       val itemKey = frozenCollectionValue(bb)
       val itemValue = frozenCollectionValue(bb)
       val itemName = itemKeysType.compose(itemKey).toString
@@ -211,7 +214,7 @@ object ColumnsMapper {
 
   private[mapping] def columns(column: Column, udt: UserType, value: ByteBuffer): Columns = {
     val itemValues = udt.split(value)
-    ((0 until udt.fieldNames.size) :\ Columns()) ((i, columns) => {
+    ((0 until udt.fieldNames.size) foldRight Columns()) ((i, columns) => {
       val itemValue = itemValues(i)
       if (itemValue == null) {
         columns
@@ -226,7 +229,7 @@ object ColumnsMapper {
 
   private[mapping] def columns(column: Column, tuple: TupleType, value: ByteBuffer): Columns = {
     val itemValues = tuple.split(value)
-    ((0 until tuple.size) :\ Columns()) ((i, columns) => {
+    ((0 until tuple.size) foldRight  Columns()) ((i, columns) => {
       val itemValue = itemValues(i)
       if (itemValue == null) {
         columns
@@ -243,6 +246,6 @@ object ColumnsMapper {
     CollectionSerializer.readCollectionSize(bb, ProtocolVersion.CURRENT)
 
   private[this] def frozenCollectionValue(bb: ByteBuffer): ByteBuffer =
-    CollectionSerializer.readValue(bb, ProtocolVersion.CURRENT)
+    CollectionSerializer.readValue(bb, ByteBufferAccessor.instance, 0, ProtocolVersion.CURRENT)
 
 }

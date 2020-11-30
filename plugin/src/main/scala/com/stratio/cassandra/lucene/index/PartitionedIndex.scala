@@ -60,7 +60,7 @@ class PartitionedIndex(
         .toList
     case _ => throw new IndexException(
       s"The number of partitions should be strictly positive but found $partitions")
-  }
+    }
 
   private[this] var mergeSort: Sort = _
   private[this] var fields: java.util.Set[String] = _
@@ -158,7 +158,7 @@ class PartitionedIndex(
     * @param document  the document to be added
     */
   def upsert(partition: Int, term: Term, document: Document) {
-    logger.debug(s"Indexing $document with term $term in $name in partition $partition")
+    logger.info(s"Indexing $document with term $term in $name in partition $partition")
     indexes(partition).upsert(term, document)
   }
 
@@ -168,7 +168,7 @@ class PartitionedIndex(
     * @param term      the term identifying the documents to be deleted
     */
   def delete(partition: Int, term: Term) {
-    logger.debug(s"Deleting $term from $name in partition $partition")
+    logger.info(s"Deleting $term from $name in partition $partition")
     indexes(partition).delete(term)
   }
 

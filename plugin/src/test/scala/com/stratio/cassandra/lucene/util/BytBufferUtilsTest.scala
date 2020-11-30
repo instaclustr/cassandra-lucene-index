@@ -30,7 +30,7 @@ class BytBufferUtilsTest extends BaseScalaTest {
 
   test("test BytesRef") {
     val t = CompositeType.getInstance(utf8, int32)
-    val in = t.builder().add(utf8.decompose("monkey")).add(int32.decompose(1)).build()
+    val in = t.decompose(utf8.decompose("monkey"), int32.decompose(1))
     val bytesRef = ByteBufferUtils.bytesRef(in)
     val out1 = ByteBufferUtils.byteBuffer(bytesRef)
     ByteBufferUtil.compareUnsigned(in, out1) shouldBe 0
@@ -55,7 +55,7 @@ class BytBufferUtilsTest extends BaseScalaTest {
 
   test("split composite") {
     val t = CompositeType.getInstance(utf8, int32)
-    val bb = t.builder.add(utf8.decompose("1")).add(int32.decompose(1)).build
+    val bb = t.decompose(utf8.decompose("1"), int32.decompose(1))
     ByteBufferUtils.split(bb, t).length shouldBe 2
   }
 

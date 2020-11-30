@@ -19,39 +19,38 @@
   ~ under the License.
   -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
-    <inceptionYear>2014</inceptionYear>
-    <packaging>pom</packaging>
+    
     <groupId>com.instaclustr</groupId>
     <artifactId>cassandra-lucene-index-parent</artifactId>
-    <version>3.11.8.1</version>
+    <version>4.0-beta4</version>
+    <packaging>pom</packaging>
+    
     <name>Cassandra Lucene index</name>
     <description>Cassandra Lucene index</description>
     <url>https://github.com/instaclustr/cassandra-lucene-index</url>
-
+    
     <modules>
         <module>builder</module>
         <module>plugin</module>
-        <module>dist</module>
     </modules>
-
+    
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0</url>
         </license>
     </licenses>
-
+    
     <scm>
         <url>https://github.com/instaclustr/cassandra-lucene-index</url>
         <connection>scm:git:git:@github.com:instaclustr/cassandra-lucene-index.git</connection>
         <developerConnection>scm:git:git@github.com:instaclustr/cassandra-lucene-index.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
-
+    
     <developers>
         <developer>
             <id>adelapena</id>
@@ -69,12 +68,14 @@
             <email>eduardoalonso at stratio dot com</email>
         </developer>
     </developers>
-
+    
     <organization>
         <name>Instaclustr</name>
         <url>https://instaclustr.com</url>
     </organization>
-
+    
+    <inceptionYear>2014</inceptionYear>
+    
     <distributionManagement>
         <repository>
             <id>ossrh</id>
@@ -85,40 +86,40 @@
             <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
         </snapshotRepository>
     </distributionManagement>
-
+    
     <properties>
-        <cassandra.version>3.11.8</cassandra.version>
-
-        <jackson.version>2.8.4</jackson.version>
+        <cassandra.version>4.0-beta4-SNAPSHOT</cassandra.version>
+        
+        <jackson.version>2.9.10</jackson.version>
         <jacoco-IT-argline></jacoco-IT-argline>
         <jts.version>1.14.0</jts.version>
         <lucene.version>5.5.4</lucene.version>
-        <scala.version>2.12.0</scala.version>
-        <scala.binary.version>2.12</scala.binary.version>
-        <scala.logging.version>3.5.0</scala.logging.version>
-        <scalatest.version>3.0.1</scalatest.version>
-
+        <scala.version>2.13.1</scala.version>
+        <scala.binary.version>2.13</scala.binary.version>
+        <scala.logging.version>3.9.2</scala.logging.version>
+        <scalatest.version>3.0.8</scalatest.version>
+        
         <mockito.version>1.10.19</mockito.version>
-        <junit.version>4.12</junit.version>
-
+        <junit.version>4.13</junit.version>
+        
         <coverage.data.dir>${project.build.outputDirectory}</coverage.data.dir>
         <skipITs>false</skipITs>
         <skipTests>false</skipTests>
-
+        
         <maven.compliler.plugin.version>2.3.2</maven.compliler.plugin.version>
         <maven.source.plugin.version>2.2.1</maven.source.plugin.version>
         <maven.javadoc.plugin.version>2.9.1</maven.javadoc.plugin.version>
-
+        
         <maven.gpg.plugin.version>1.6</maven.gpg.plugin.version>
         <nexus.staging.maven.plugin.version>1.6.8</nexus.staging.maven.plugin.version>
-
+        
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-
+        
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
-
+    
     <build>
         <plugins>
             <plugin>
@@ -131,35 +132,35 @@
                     <encoding>${project.build.sourceEncoding}</encoding>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>${maven.source.plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>${maven.javadoc.plugin.version}</version>
-                <executions>
-                    <execution>
-                        <id>attach-javadocs</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                        <configuration>
-                            <failOnError>false</failOnError>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+<!--            <plugin>-->
+<!--                <groupId>org.apache.maven.plugins</groupId>-->
+<!--                <artifactId>maven-source-plugin</artifactId>-->
+<!--                <version>${maven.source.plugin.version}</version>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <id>attach-sources</id>-->
+<!--                        <goals>-->
+<!--                            <goal>jar</goal>-->
+<!--                        </goals>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--            </plugin>-->
+<!--            <plugin>-->
+<!--                <groupId>org.apache.maven.plugins</groupId>-->
+<!--                <artifactId>maven-javadoc-plugin</artifactId>-->
+<!--                <version>${maven.javadoc.plugin.version}</version>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <id>attach-javadocs</id>-->
+<!--                        <goals>-->
+<!--                            <goal>jar</goal>-->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <failOnError>false</failOnError>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--            </plugin>-->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -170,7 +171,7 @@
             </plugin>
         </plugins>
     </build>
-
+    
     <profiles>
         <!-- Use this profile when releasing. For example: "mvn clean deploy -P release" -->
         <profile>

@@ -18,15 +18,14 @@ package com.stratio.cassandra.lucene.mapping
 import com.stratio.cassandra.lucene.IndexException
 import com.stratio.cassandra.lucene.mapping.ExpressionMapper.parse
 import com.stratio.cassandra.lucene.search.{Search, SearchBuilder}
-import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
 import org.apache.cassandra.cql3.Operator
-import org.apache.cassandra.cql3.statements.IndexTarget._
+import org.apache.cassandra.cql3.statements.schema.IndexTarget._
 import org.apache.cassandra.db.ReadCommand
 import org.apache.cassandra.db.filter.RowFilter
 import org.apache.cassandra.db.filter.RowFilter.{CustomExpression, Expression}
 import org.apache.cassandra.db.marshal.UTF8Type
 import org.apache.cassandra.db.rows.{BTreeRow, BufferCell, Row}
-import org.apache.cassandra.schema.IndexMetadata
+import org.apache.cassandra.schema.{ColumnMetadata, IndexMetadata, TableMetadata}
 import org.apache.commons.lang3.StringUtils.isBlank
 import org.apache.lucene.search.ScoreDoc
 
@@ -38,11 +37,11 @@ import scala.collection.JavaConverters._
   * @param indexMetadata the index metadata
   * @author Andres de la Pena `adelapena@stratio.com`
   */
-case class ExpressionMapper(tableMetadata: CFMetaData, indexMetadata: IndexMetadata) {
+case class ExpressionMapper(tableMetadata: TableMetadata, indexMetadata: IndexMetadata) {
 
   val name = indexMetadata.name
   val column = Option(indexMetadata.options.get(TARGET_OPTION_NAME)).filterNot(isBlank)
-  val columns = tableMetadata.allColumns.asScala.toSet
+  val columns = tableMetadata.columns().asScala.toSet
   val columnDefinition = column.flatMap(name => columns.find(_.name.toString == name))
 
   /** Returns the first [[Search]] contained in the specified read command.
@@ -105,7 +104,7 @@ case class ExpressionMapper(tableMetadata: CFMetaData, indexMetadata: IndexMetad
     * @param operator   the expression operator
     * @return `true` if the expression is targeted to this index, `false` otherwise
     */
-  def supports(definition: ColumnDefinition, operator: Operator): Boolean = {
+  def supports(definition: ColumnMetadata, operator: Operator): Boolean = {
     operator == Operator.EQ && column.contains(definition.name.toString)
   }
 
@@ -132,7 +131,7 @@ case class ExpressionMapper(tableMetadata: CFMetaData, indexMetadata: IndexMetad
     if (columnDefinition.isEmpty) return row
 
     // Copy row
-    val builder = BTreeRow.unsortedBuilder(nowInSec)
+    val builder = BTreeRow.unsortedBuilder()
     builder.newRow(row.clustering())
     builder.addRowDeletion(row.deletion)
     builder.addPrimaryKeyLivenessInfo(row.primaryKeyLivenessInfo)

@@ -16,11 +16,11 @@
 package com.stratio.cassandra.lucene
 
 import com.stratio.cassandra.lucene.index.DocumentIterator
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db._
 import org.apache.cassandra.db.filter.ClusteringIndexFilter
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator
 import org.apache.cassandra.db.rows.UnfilteredRowIterator
+import org.apache.cassandra.schema.TableMetadata
 
 /** [[UnfilteredPartitionIterator]] for retrieving rows from a [[DocumentIterator]].
   *
@@ -37,16 +37,13 @@ abstract class IndexReader(
     documents: DocumentIterator)
   extends UnfilteredPartitionIterator {
 
+  private lazy val metadataVal: TableMetadata = table.metadata.get()
+
   protected var nextData: Option[UnfilteredRowIterator] = None
 
   /** @inheritdoc */
-  override def isForThrift: Boolean = {
-    command.isForThrift
-  }
-
-  /** @inheritdoc */
-  override def metadata: CFMetaData = {
-    table.metadata
+  override def metadata: TableMetadata = {
+    metadataVal
   }
 
   /** @inheritdoc */
@@ -76,8 +73,7 @@ abstract class IndexReader(
 
   protected def read(key: DecoratedKey, filter: ClusteringIndexFilter): UnfilteredRowIterator = {
     SinglePartitionReadCommand.create(
-      isForThrift,
-      table.metadata,
+      metadataVal,
       command.nowInSec,
       command.columnFilter,
       command.rowFilter,

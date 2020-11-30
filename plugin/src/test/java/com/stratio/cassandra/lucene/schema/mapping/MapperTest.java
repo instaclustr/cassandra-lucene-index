@@ -35,7 +35,7 @@ public class MapperTest {
     @Test
     public void testIndexableFields() {
         Mapper mapper = stringMapper().build("f");
-        Columns columns = Columns.empty().add("f", "v");
+        Columns columns = new Columns().add("f", "v");
         List<IndexableField> fields = mapper.indexableFields(columns);
         assertEquals("Expected 2 fields", 2, fields.size());
     }
@@ -43,7 +43,7 @@ public class MapperTest {
     @Test
     public void testBestEffortIndexableFields() {
         Mapper mapper = integerMapper().build("f");
-        Columns columns = Columns.empty().add("f", "1").add("f", "x").add("f", "2");
+        Columns columns = new Columns().add("f", "1").add("f", "x").add("f", "2");
         List<IndexableField> fields = mapper.bestEffortIndexableFields(columns);
         assertEquals("Expected 4 fields", 4, fields.size());
     }

@@ -17,8 +17,8 @@ package com.stratio.cassandra.lucene.partitioning
 
 import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo}
 import com.stratio.cassandra.lucene.common.JsonSerializer
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.{DecoratedKey, ReadCommand}
+import org.apache.cassandra.schema.TableMetadata
 
 /** Class defining an index partitioning strategy. Partitioning splits each node index in multiple
   * partitions in order to speed up some searches to the detriment of others, depending on
@@ -68,7 +68,7 @@ object Partitioner {
     * @param json a JSON string representing a [[Partitioner]]
     * @return the partitioner represented by `json`
     */
-  def fromJson(metadata: CFMetaData, json: String): Partitioner =
+  def fromJson(metadata: TableMetadata, json: String): Partitioner =
     fromJson(json).build(metadata)
 
   @JsonTypeInfo(
@@ -83,7 +83,7 @@ object Partitioner {
     new JsonSubTypes.Type(value = classOf[PartitionerOnVirtualNode.Builder], name = "vnode")))
   trait Builder {
 
-    def build(metadata: CFMetaData): Partitioner
+    def build(metadata: TableMetadata): Partitioner
 
   }
 

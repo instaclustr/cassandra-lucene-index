@@ -17,10 +17,10 @@ package com.stratio.cassandra.lucene
 
 import com.stratio.cassandra.lucene.index.DocumentIterator
 import com.stratio.cassandra.lucene.util.Logging
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.{ColumnFamilyStore, ReadCommand}
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator
 import org.apache.cassandra.db.rows.UnfilteredRowIterator
+import org.apache.cassandra.schema.TableMetadata
 
 /** [[UnfilteredPartitionIterator]] for retrieving rows from a [[DocumentIterator]].
   *
@@ -28,9 +28,7 @@ import org.apache.cassandra.db.rows.UnfilteredRowIterator
   */
 class IndexReaderExcludingDataCenter(command: ReadCommand,
                                      table: ColumnFamilyStore) extends UnfilteredPartitionIterator with Logging {
-  override def metadata(): CFMetaData = table.metadata
-
-  override def isForThrift: Boolean = command.isForThrift
+  override def metadata(): TableMetadata = table.metadata.get()
 
   override def close(): Unit = {}
 

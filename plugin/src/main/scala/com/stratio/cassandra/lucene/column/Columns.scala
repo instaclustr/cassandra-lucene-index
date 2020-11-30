@@ -62,16 +62,17 @@ case class Columns(private val columns: List[Column]) extends Traversable[Column
   override def toString: String = (toStringHelper(this) /: columns) ((helper, column) =>
     helper.add(column.field, column.value)).toString
 
+  override def iterator: Iterator[Column] = columns.iterator
 }
 
 /** Companion object for [[Columns]]. */
 object Columns {
 
   /** An empty columns. */
-  val empty: Columns = new Columns
+  def empty(): Columns = new Columns
 
   /** Returns a new empty columns. */
-  def apply: Columns = empty
+  def apply: Columns = empty()
 
   /** Returns a new [[Columns]] composed by the specified [[Column]]s. */
   def apply(columns: Traversable[Column]): Columns = new Columns(columns.toList)

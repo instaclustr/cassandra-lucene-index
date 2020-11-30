@@ -15,26 +15,29 @@
  */
 package org.apache.cassandra.service;
 
-import com.google.common.collect.Iterators;
-import com.google.common.collect.PeekingIterator;
-import com.stratio.cassandra.lucene.Index;
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.*;
-import org.apache.cassandra.db.partitions.PartitionIterator;
-import org.apache.cassandra.dht.AbstractBounds;
-import org.apache.cassandra.dht.RingPosition;
-import org.apache.cassandra.exceptions.*;
-import org.apache.cassandra.locator.LocalStrategy;
-import org.apache.cassandra.metrics.ClientRequestMetrics;
-import org.apache.cassandra.utils.AbstractIterator;
-
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import com.stratio.cassandra.lucene.Index;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.ConsistencyLevel;
+import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.PartitionRangeReadCommand;
+import org.apache.cassandra.db.ReadCommand;
+import org.apache.cassandra.db.SinglePartitionReadCommand;
+import org.apache.cassandra.db.partitions.PartitionIterator;
+import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.exceptions.IsBootstrappingException;
+import org.apache.cassandra.exceptions.ReadFailureException;
+import org.apache.cassandra.exceptions.ReadTimeoutException;
+import org.apache.cassandra.exceptions.UnavailableException;
+import org.apache.cassandra.metrics.ClientRequestMetrics;
+import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.service.StorageProxy.RangeIterator;
+import org.apache.cassandra.service.StorageProxy.RangeMerger;
 
 /**
  * Modified version of Apache Cassandra {@link StorageProxy} to be used with Lucene searches.
@@ -72,7 +75,7 @@ public class LuceneStorageProxy {
     throws UnavailableException, IsBootstrappingException, ReadFailureException, ReadTimeoutException,
            InvalidRequestException, ReflectiveOperationException {
 
-        if (StorageService.instance.isBootstrapMode() && !systemKeyspaceQuery(group.commands)) {
+        if (StorageService.instance.isBootstrapMode() && !systemKeyspaceQuery(group.queries)) {
             readMetrics.unavailables.mark();
             throw new IsBootstrappingException();
         }
@@ -86,13 +89,13 @@ public class LuceneStorageProxy {
     throws UnavailableException, ReadFailureException, ReadTimeoutException, ReflectiveOperationException {
         long start = System.nanoTime();
         try {
-            PartitionIterator result = fetchRows(group.commands, consistencyLevel, queryStartNanoTime);
+            PartitionIterator result = fetchRows(group.queries, consistencyLevel, queryStartNanoTime);
             // If we have more than one command, then despite each read command honoring the limit, the total result
             // might not honor it and so we should enforce it
-            if (group.commands.size() > 1) {
-                ReadCommand command = group.commands.get(0);
-                CFMetaData metadata = group.metadata();
-                ColumnFamilyStore cfs = Keyspace.open(metadata.ksName).getColumnFamilyStore(metadata.cfName);
+            if (group.queries.size() > 1) {
+                ReadCommand command = group.queries.get(0);
+                TableMetadata metadata = group.metadata();
+                ColumnFamilyStore cfs = Keyspace.open(metadata.keyspace).getColumnFamilyStore(metadata.name);
                 Index index = (Index) command.getIndex(cfs);
                 result = index.postProcessorFor(group).apply(result, group);
                 result = group.limits().filter(result, group.nowInSec(),true, metadata.enforceStrictLiveness());
@@ -113,7 +116,7 @@ public class LuceneStorageProxy {
             long latency = System.nanoTime() - start;
             readMetrics.addNano(latency);
             // TODO avoid giving every command the same latency number.  Can fix this in CASSANDRA-5329
-            for (ReadCommand command : group.commands) {
+            for (ReadCommand command : group.queries) {
                 Keyspace.openAndGetStore(command.metadata()).metric.coordinatorReadLatency.update(latency,
                                                                                                   TimeUnit.NANOSECONDS);
             }
@@ -123,120 +126,115 @@ public class LuceneStorageProxy {
     ///////////////////////////////////////
 
     public static RangeMerger rangeMerger(PartitionRangeReadCommand command, ConsistencyLevel consistency) {
-        Keyspace keyspace = Keyspace.open(command.metadata().ksName);
+        Keyspace keyspace = Keyspace.open(command.metadata().keyspace);
         RangeIterator rangeIterator = new RangeIterator(command, keyspace, consistency);
         return new RangeMerger(rangeIterator, keyspace, consistency);
     }
 
-    public static <T extends RingPosition<T>> List<AbstractBounds<T>> getRestrictedRanges(final AbstractBounds<T> queryRange) {
-        return StorageProxy.getRestrictedRanges(queryRange);
-    }
+//    public static <T extends RingPosition<T>> List<AbstractBounds<T>> getRestrictedRanges(final AbstractBounds<T> queryRange) {
+//        return StorageProxy.getRestrictedRanges(queryRange);
+//    }
 
-    public static class RangeIterator extends AbstractIterator<RangeForQuery> {
-        private final Keyspace keyspace;
-        private final ConsistencyLevel consistency;
-        private final Iterator<? extends AbstractBounds<PartitionPosition>> ranges;
-        private final int rangeCount;
+//    public static class RangeIterator extends AbstractIterator<ReplicaPlan.ForRangeRead> {
+//        private final Keyspace keyspace;
+//        private final ConsistencyLevel consistency;
+//        private final Iterator<? extends AbstractBounds<PartitionPosition>> ranges;
+//        private final int rangeCount;
+//
+//        public RangeIterator(PartitionRangeReadCommand command, Keyspace keyspace, ConsistencyLevel consistency) {
+//            this.keyspace = keyspace;
+//            this.consistency = consistency;
+//
+//            List<? extends AbstractBounds<PartitionPosition>>
+//                    l
+//                    = keyspace.getReplicationStrategy() instanceof LocalStrategy
+//                      ? command.dataRange().keyRange().unwrap()
+//                      : getRestrictedRanges(command.dataRange().keyRange());
+//            this.ranges = l.iterator();
+//            this.rangeCount = l.size();
+//        }
+//
+//        public int rangeCount() {
+//            return rangeCount;
+//        }
+//
+//
+//        protected ReplicaPlan.ForRangeRead computeNext()
+//        {
+//            if (!ranges.hasNext())
+//                return endOfData();
+//
+//            return ReplicaPlans.forRangeRead(keyspace, consistency, ranges.next(), 1);
+//        }
 
-        public RangeIterator(PartitionRangeReadCommand command, Keyspace keyspace, ConsistencyLevel consistency) {
-            this.keyspace = keyspace;
-            this.consistency = consistency;
+//        protected RangeForQuery computeNext() {
+//            if (!ranges.hasNext()) {
+//                return endOfData();
+//            }
+//
+//            AbstractBounds<PartitionPosition> range = ranges.next();
+//            List<InetAddress> liveEndpoints = StorageProxy.getLiveSortedEndpoints(keyspace, range.right);
+//
+//            return new RangeForQuery(range, liveEndpoints, consistency.filterForQuery(keyspace, liveEndpoints));
+//        }
+//    }
 
-            List<? extends AbstractBounds<PartitionPosition>>
-                    l
-                    = keyspace.getReplicationStrategy() instanceof LocalStrategy
-                      ? command.dataRange().keyRange().unwrap()
-                      : getRestrictedRanges(command.dataRange().keyRange());
-            this.ranges = l.iterator();
-            this.rangeCount = l.size();
-        }
+//    public static class RangeForQuery {
+//        public final AbstractBounds<PartitionPosition> range;
+//        public final List<InetAddress> liveEndpoints;
+//        public final List<InetAddress> filteredEndpoints;
+//
+//        public RangeForQuery(AbstractBounds<PartitionPosition> range,
+//                             List<InetAddress> liveEndpoints,
+//                             List<InetAddress> filteredEndpoints) {
+//            this.range = range;
+//            this.liveEndpoints = liveEndpoints;
+//            this.filteredEndpoints = filteredEndpoints;
+//        }
+//    }
 
-        public int rangeCount() {
-            return rangeCount;
-        }
-
-        protected RangeForQuery computeNext() {
-            if (!ranges.hasNext()) {
-                return endOfData();
-            }
-
-            AbstractBounds<PartitionPosition> range = ranges.next();
-            List<InetAddress> liveEndpoints = StorageProxy.getLiveSortedEndpoints(keyspace, range.right);
-            return new RangeForQuery(range, liveEndpoints, consistency.filterForQuery(keyspace, liveEndpoints));
-        }
-    }
-
-    public static class RangeForQuery {
-        public final AbstractBounds<PartitionPosition> range;
-        public final List<InetAddress> liveEndpoints;
-        public final List<InetAddress> filteredEndpoints;
-
-        public RangeForQuery(AbstractBounds<PartitionPosition> range,
-                             List<InetAddress> liveEndpoints,
-                             List<InetAddress> filteredEndpoints) {
-            this.range = range;
-            this.liveEndpoints = liveEndpoints;
-            this.filteredEndpoints = filteredEndpoints;
-        }
-    }
-
-    public static class RangeMerger extends AbstractIterator<RangeForQuery> {
-        private final Keyspace keyspace;
-        private final ConsistencyLevel consistency;
-        private final PeekingIterator<RangeForQuery> ranges;
-
-        private RangeMerger(Iterator<RangeForQuery> iterator, Keyspace keyspace, ConsistencyLevel consistency) {
-            this.keyspace = keyspace;
-            this.consistency = consistency;
-            this.ranges = Iterators.peekingIterator(iterator);
-        }
-
-        protected RangeForQuery computeNext() {
-            if (!ranges.hasNext()) {
-                return endOfData();
-            }
-
-            RangeForQuery current = ranges.next();
-
-            // getRestrictedRange has broken the queried range into per-[vnode] token ranges, but this doesn't take
-            // the replication factor into account. If the intersection of live endpoints for 2 consecutive ranges
-            // still meets the CL requirements, then we can merge both ranges into the same RangeSliceCommand.
-            while (ranges.hasNext()) {
-                // If the current range right is the min token, we should stop merging because CFS.getRangeSlice
-                // don't know how to deal with a wrapping range.
-                // Note: it would be slightly more efficient to have CFS.getRangeSlice on the destination nodes unwraps
-                // the range if necessary and deal with it. However, we can't start sending wrapped range without breaking
-                // wire compatibility, so It's likely easier not to bother;
-                if (current.range.right.isMinimum()) {
-                    break;
-                }
-
-                RangeForQuery next = ranges.peek();
-
-                List<InetAddress> merged = intersection(current.liveEndpoints, next.liveEndpoints);
-
-                // Check if there is enough endpoint for the merge to be possible.
-                if (!consistency.isSufficientLiveNodes(keyspace, merged)) {
-                    break;
-                }
-
-                List<InetAddress> filteredMerged = consistency.filterForQuery(keyspace, merged);
-
-                // Estimate whether merging will be a win or not
-                if (!DatabaseDescriptor.getEndpointSnitch()
-                                       .isWorthMergingForRangeQuery(filteredMerged,
-                                                                    current.filteredEndpoints,
-                                                                    next.filteredEndpoints)) {
-                    break;
-                }
-
-                // If we get there, merge this range and the next one
-                current = new RangeForQuery(current.range.withNewRight(next.range.right), merged, filteredMerged);
-                ranges.next(); // consume the range we just merged since we've only peeked so far
-            }
-            return current;
-        }
-    }
+//    public static class RangeMerger extends AbstractIterator<ReplicaPlan.ForRangeRead> {
+//        private final Keyspace keyspace;
+//        private final ConsistencyLevel consistency;
+//        private final PeekingIterator<ReplicaPlan.ForRangeRead> ranges;
+//
+//        private RangeMerger(Iterator<ReplicaPlan.ForRangeRead> iterator, Keyspace keyspace, ConsistencyLevel consistency) {
+//            this.keyspace = keyspace;
+//            this.consistency = consistency;
+//            this.ranges = Iterators.peekingIterator(iterator);
+//        }
+//
+//        protected ReplicaPlan.ForRangeRead computeNext() {
+//            if (!ranges.hasNext()) {
+//                return endOfData();
+//            }
+//
+//            ReplicaPlan.ForRangeRead current = ranges.next();
+//
+//            // getRestrictedRange has broken the queried range into per-[vnode] token ranges, but this doesn't take
+//            // the replication factor into account. If the intersection of live endpoints for 2 consecutive ranges
+//            // still meets the CL requirements, then we can merge both ranges into the same RangeSliceCommand.
+//            while (ranges.hasNext()) {
+//                // If the current range right is the min token, we should stop merging because CFS.getRangeSlice
+//                // don't know how to deal with a wrapping range.
+//                // Note: it would be slightly more efficient to have CFS.getRangeSlice on the destination nodes unwraps
+//                // the range if necessary and deal with it. However, we can't start sending wrapped range without breaking
+//                // wire compatibility, so It's likely easier not to bother;
+//                if (current.range().right.isMinimum()) {
+//                    break;
+//                }
+//
+//                ReplicaPlan.ForRangeRead next = ranges.peek();
+//                ReplicaPlan.ForRangeRead merged = ReplicaPlans.maybeMerge(keyspace, consistency, current, next);
+//                if (merged == null)
+//                    break;
+//
+//                current = merged;
+//                ranges.next(); // consume the range we just merged since we've only peeked so far
+//            }
+//            return current;
+//        }
+//    }
 
     private static List<InetAddress> intersection(List<InetAddress> l1, List<InetAddress> l2) {
         // Note: we don't use Guava Sets.intersection() for 3 reasons:

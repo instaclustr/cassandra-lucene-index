@@ -22,10 +22,11 @@ import com.google.common.primitives.Longs
 import com.stratio.cassandra.lucene.mapping.ClusteringMapper._
 import com.stratio.cassandra.lucene.util.ByteBufferUtils
 import com.stratio.cassandra.lucene.util.ByteBufferUtils._
-import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
+import org.apache.cassandra.schema.TableMetadata
+import org.apache.cassandra.schema.ColumnMetadata
 import org.apache.cassandra.db._
 import org.apache.cassandra.db.filter.{ClusteringIndexNamesFilter, ClusteringIndexSliceFilter}
-import org.apache.cassandra.db.marshal.CompositeType
+import org.apache.cassandra.db.marshal.{ByteBufferAccessor, CompositeType}
 import org.apache.cassandra.dht.Token
 import org.apache.cassandra.utils.ByteBufferUtil.EMPTY_BYTE_BUFFER
 import org.apache.cassandra.utils.FastByteOperations._
@@ -44,7 +45,7 @@ import scala.collection.JavaConverters._
   * @param metadata the indexed table metadata
   * @author Andres de la Pena `adelapena@stratio.com`
   */
-class ClusteringMapper(metadata: CFMetaData) {
+class ClusteringMapper(metadata: TableMetadata) {
 
   /** The clustering key comparator */
   val comparator: ClusteringComparator = metadata.comparator
@@ -52,7 +53,7 @@ class ClusteringMapper(metadata: CFMetaData) {
   /** A composite type composed by the types of the clustering key */
   val clusteringType: CompositeType = CompositeType.getInstance(comparator.subtypes)
 
-  val clusteringColumns: List[ColumnDefinition] = metadata.clusteringColumns.asScala.toList
+  val clusteringColumns: List[ColumnMetadata] = metadata.clusteringColumns.asScala.toList
 
   /** Returns a list of Lucene [[IndexableField]]s representing the specified primary key.
     *
@@ -60,7 +61,7 @@ class ClusteringMapper(metadata: CFMetaData) {
     * @param clustering the clustering key
     * @return a indexable field
     */
-  def indexableFields(key: DecoratedKey, clustering: Clustering): List[IndexableField] = {
+  def indexableFields(key: DecoratedKey, clustering: Clustering[_]): List[IndexableField] = {
 
     // Build stored field for clustering key retrieval
     val plainClustering = bytesRef(byteBuffer(clustering))
@@ -79,8 +80,9 @@ class ClusteringMapper(metadata: CFMetaData) {
     * @param clustering a clustering key
     * @return a byte buffer representing `clustering`
     */
-  def byteBuffer(clustering: Clustering): ByteBuffer = {
-    (clusteringType.builder /: clustering.getRawValues) (_ add _) build()
+  def byteBuffer(clustering: Clustering[_]): ByteBuffer = {
+    CompositeType.build(ByteBufferAccessor.instance, clustering.getBufferArray : _*)
+    //clusteringType.decompose(clustering.getRawValues)
   }
 
   /** Returns the [[String]] human-readable representation of the specified [[ClusteringPrefix]].
@@ -88,7 +90,7 @@ class ClusteringMapper(metadata: CFMetaData) {
     * @param prefix the clustering prefix
     * @return a [[String]] representing the prefix
     */
-  def toString(prefix: Option[ClusteringPrefix]): String = {
+  def toString(prefix: Option[ClusteringPrefix[_]]): String = {
     prefix.map(_.toString(metadata)).orNull
   }
 
@@ -97,7 +99,7 @@ class ClusteringMapper(metadata: CFMetaData) {
     * @param clustering a byte buffer containing a [[Clustering]]
     * @return a Lucene field binary value
     */
-  def clustering(clustering: ByteBuffer): Clustering = {
+  def clustering(clustering: ByteBuffer): Clustering[_] = {
     Clustering.make(clusteringType.split(clustering): _*)
   }
 
@@ -106,7 +108,7 @@ class ClusteringMapper(metadata: CFMetaData) {
     * @param document a document containing the clustering key to be get
     * @return the clustering key contained in the document
     */
-  def clustering(document: Document): Clustering = {
+  def clustering(document: Document): Clustering[_] = {
     val bytesRef = document.getBinaryValue(FIELD_NAME)
     clustering(ByteBufferUtils.byteBuffer(bytesRef))
   }
@@ -128,8 +130,8 @@ class ClusteringMapper(metadata: CFMetaData) {
     */
   def query(
       position: PartitionPosition,
-      start: Option[ClusteringPrefix],
-      stop: Option[ClusteringPrefix]): Query = {
+      start: Option[ClusteringPrefix[_]],
+      stop: Option[ClusteringPrefix[_]]): Query = {
     new ClusteringQuery(this, position, start, stop)
   }
 
@@ -191,7 +193,7 @@ object ClusteringMapper {
     * @param range the data range
     * @return the optional start clustering prefix of the data range
     */
-  def startClusteringPrefix(range: DataRange): Option[ClusteringPrefix] = {
+  def startClusteringPrefix(range: DataRange): Option[ClusteringPrefix[_]] = {
     val filter = range.startKey match {
       case key: DecoratedKey => range.clusteringIndexFilter(key)
       case position =>
@@ -209,7 +211,7 @@ object ClusteringMapper {
     * @param range the data range
     * @return the optional stop clustering prefix of the data range
     */
-  def stopClusteringPrefix(range: DataRange): Option[ClusteringPrefix] = {
+  def stopClusteringPrefix(range: DataRange): Option[ClusteringPrefix[_]] = {
     val filter = range.stopKey match {
       case key: DecoratedKey => range.clusteringIndexFilter(key)
       case position =>
@@ -230,15 +232,19 @@ object ClusteringMapper {
   * @param mapper the primary key mapper to be used
   */
 class ClusteringSort(mapper: ClusteringMapper) extends SortField(
-  FIELD_NAME, (field, hits, _, _) => new TermValComparator(hits, field, false) {
-    override def compareValues(t1: BytesRef, t2: BytesRef): Int = {
-      val comp = compareUnsigned(t1.bytes, 0, PREFIX_SIZE, t2.bytes, 0, PREFIX_SIZE)
-      if (comp != 0) return comp
-      val bb1 = ByteBuffer.wrap(t1.bytes, PREFIX_SIZE, t1.length - PREFIX_SIZE)
-      val bb2 = ByteBuffer.wrap(t2.bytes, PREFIX_SIZE, t2.length - PREFIX_SIZE)
-      val clustering1 = mapper.clustering(bb1)
-      val clustering2 = mapper.clustering(bb2)
-      mapper.comparator.compare(clustering1, clustering2)
+  FIELD_NAME, new FieldComparatorSource {
+    override def newComparator(fieldname: String, numHits: Int, sortPos: Int, reversed: Boolean): FieldComparator[_] = {
+      new TermValComparator(numHits, fieldname, false) {
+        override def compareValues(t1: BytesRef, t2: BytesRef): Int = {
+          val comp = compareUnsigned(t1.bytes, 0, PREFIX_SIZE, t2.bytes, 0, PREFIX_SIZE)
+          if (comp != 0) return comp
+          val bb1 = ByteBuffer.wrap(t1.bytes, PREFIX_SIZE, t1.length - PREFIX_SIZE)
+          val bb2 = ByteBuffer.wrap(t2.bytes, PREFIX_SIZE, t2.length - PREFIX_SIZE)
+          val clustering1 = mapper.clustering(bb1)
+          val clustering2 = mapper.clustering(bb2)
+          mapper.comparator.compare(clustering1, clustering2)
+        }
+      }
     }
   }) {
 
@@ -250,7 +256,6 @@ class ClusteringSort(mapper: ClusteringMapper) extends SortField(
     case _: ClusteringSort => true
     case _ => false
   }
-
 }
 
 /** [[MultiTermQuery]] to get a range of clustering keys.
@@ -263,8 +268,8 @@ class ClusteringSort(mapper: ClusteringMapper) extends SortField(
 class ClusteringQuery(
     val mapper: ClusteringMapper,
     val position: PartitionPosition,
-    val start: Option[ClusteringPrefix],
-    val stop: Option[ClusteringPrefix]) extends MultiTermQuery(FIELD_NAME) {
+    val start: Option[ClusteringPrefix[_]],
+    val stop: Option[ClusteringPrefix[_]]) extends MultiTermQuery(FIELD_NAME) {
 
   val token = position.getToken
   val seek = ClusteringMapper.prefix(token)
