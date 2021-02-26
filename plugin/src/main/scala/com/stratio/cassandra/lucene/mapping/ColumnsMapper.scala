@@ -179,37 +179,20 @@ object ColumnsMapper {
   }
 
   private[mapping] def columns(column: Column, set: SetType[_], value: ByteBuffer): Columns = {
-    val nameType = set.nameComparator
-    val bb = ByteBufferUtil.clone(value) // CollectionSerializer read functions are impure
-    ((0 until frozenCollectionSize(bb)) :\ Columns()) (
-      (_, columns) => {
-        val itemValue = frozenCollectionValue(bb)
-        this.columns(column, nameType, itemValue) ++ columns
-      })
+    Columns(set.getSerializer.deserialize(value).asScala.map(v => column.withValue(v)))
   }
 
   private[mapping] def columns(column: Column, list: ListType[_], value: ByteBuffer): Columns = {
-    val valueType = list.valueComparator
-    val bb = ByteBufferUtil.clone(value) // CollectionSerializer read functions are impure
-    ((0 until frozenCollectionSize(bb)) foldRight Columns()) ((_, columns) => {
-      val itemValue = frozenCollectionValue(bb)
-      this.columns(column, valueType, itemValue) ++ columns
-    })
+    Columns(list.getSerializer.deserialize(value).asScala.map(v => column.withValue(v)))
   }
 
   private[mapping] def columns(column: Column, map: MapType[_, _], value: ByteBuffer): Columns = {
-    val itemKeysType = map.nameComparator
-    val itemValuesType = map.valueComparator
-    val bb = ByteBufferUtil.clone(value) // CollectionSerializer read functions are impure
-    ((0 until frozenCollectionSize(bb)) foldRight Columns()) ((_, columns) => {
-      val itemKey = frozenCollectionValue(bb)
-      val itemValue = frozenCollectionValue(bb)
-      val itemName = itemKeysType.compose(itemKey).toString
-      val keyColumn = column.withUDTName(Column.MAP_KEY_SUFFIX).withValue(itemKey, itemKeysType)
-      val valueColumn = this.columns(column.withUDTName(Column.MAP_VALUE_SUFFIX), itemValuesType, itemValue)
-      val entryColumn = this.columns(column.withMapName(itemName), itemValuesType, itemValue)
-      keyColumn + valueColumn ++ entryColumn  ++ columns
-    })
+    map.getSerializer.deserialize(value).asScala.map((kv) => {
+      val keyColumn = column.withUDTName(Column.MAP_KEY_SUFFIX).withValue(kv._1)
+      val valueColumn = column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue(kv._2)
+      val entryColumn = column.withMapName(kv._1.toString).withValue(kv._2)
+      Columns(keyColumn, valueColumn, entryColumn)
+    }).reduce((a,b) => b ++ a)
   }
 
   private[mapping] def columns(column: Column, udt: UserType, value: ByteBuffer): Columns = {
@@ -246,6 +229,6 @@ object ColumnsMapper {
     CollectionSerializer.readCollectionSize(bb, ProtocolVersion.CURRENT)
 
   private[this] def frozenCollectionValue(bb: ByteBuffer): ByteBuffer =
-    CollectionSerializer.readValue(bb, ByteBufferAccessor.instance, 0, ProtocolVersion.CURRENT)
+    CollectionSerializer.readValue(bb, ByteBufferAccessor.instance, 4, ProtocolVersion.CURRENT)
 
 }

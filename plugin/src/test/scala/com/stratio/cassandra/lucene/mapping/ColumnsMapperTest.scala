@@ -16,6 +16,7 @@
 package com.stratio.cassandra.lucene.mapping
 
 import java.math.{BigDecimal, BigInteger}
+import java.nio.ByteBuffer
 import java.util.{Date, UUID}
 
 import com.google.common.collect.Lists
@@ -39,41 +40,39 @@ import scala.collection.JavaConverters._
 @RunWith(classOf[JUnitRunner])
 class ColumnsMapperTest extends BaseScalaTest {
 
-//  test("columns from plain cells") {
-//    def test[A](abstractType: AbstractType[A], value: A) = {
-//      val column = Column("cell")
-//      columnsFromValue[A](column, abstractType, value) shouldBe
-//        Columns(column.withValue(value))
-//    }
-//    test(ascii, "Ab")
-//    test(utf8, "Ab")
-//    test(int32, 7.asInstanceOf[Integer])
-//    test(float, 7.3f.asInstanceOf[java.lang.Float])
-//    test(long, 7l.asInstanceOf[java.lang.Long])
-//    test(double, 7.3d.asInstanceOf[java.lang.Double])
-//    test(integer, new BigInteger("7"))
-//    test(decimal, new BigDecimal("7.3"))
-//    test(uuid, UUID.randomUUID)
-//    test(lexicalUuid, UUID.randomUUID)
-//    test(timeUuid, UUIDGen.getTimeUUID)
-//    test(timestamp, new Date)
-//    test(boolean, true.asInstanceOf[java.lang.Boolean])
-//  }
+    test("columns from plain cells") {
+      def test[A](abstractType: AbstractType[_], value: ByteBuffer) = {
+        val column = Column("cell")
+        ColumnsMapper.columns(column, abstractType, value) shouldBe
+          Columns(column.withValue(abstractType.getSerializer.deserialize(value)))
+      }
+      test(ascii, ascii.getSerializer.serialize("Ab"))
+      test(utf8, utf8.getSerializer.serialize("Ab"))
+      test(int32, int32.getSerializer.serialize(7.asInstanceOf[Integer]))
+      test(float, float.getSerializer.serialize(7.3f.asInstanceOf[java.lang.Float]))
+      test(long, long.getSerializer.serialize(7l.asInstanceOf[java.lang.Long]))
+      test(double, double.getSerializer.serialize(7.3d.asInstanceOf[java.lang.Double]))
+      test(integer, integer.getSerializer.serialize(new BigInteger("7")))
+      test(decimal, decimal.getSerializer.serialize(new BigDecimal("7.3")))
+      test(uuid, uuid.getSerializer.serialize(UUID.randomUUID))
+      test(lexicalUuid, lexicalUuid.getSerializer.serialize(UUID.randomUUID))
+      test(timeUuid, timeUuid.getSerializer.serialize(UUIDGen.getTimeUUID))
+      test(timestamp, timestamp.getSerializer.serialize(new Date))
+      test(boolean, boolean.getSerializer.serialize(true.asInstanceOf[java.lang.Boolean]))
+    }
 
   test("columns from frozen set") {
     val column = Column("cell")
     val `type` = set(utf8, multiCell = true)
-    val bb = `type`.decompose(Set("a", "b").asJava)
-    val result: Columns = columns(column, `type`, bb)
-
-    result shouldBe Columns(column.withValue("b"), column.withValue("a"))
+    val bb = `type`.getSerializer.serialize(Set("a", "b").asJava)
+    columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
   }
 
   test("columns from frozen list") {
     val column = Column("cell")
     val `type` = list(utf8, multiCell = false)
     val bb = `type`.decompose(List("a", "b").asJava)
-    columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
+    columns(column, `type`, bb) shouldBe Columns(column.withValue("a"), column.withValue("b"))
   }
 
   test("columns from tuple") {
@@ -88,7 +87,11 @@ class ColumnsMapperTest extends BaseScalaTest {
     val column = Column("cell")
     val `type` = map(utf8, utf8, multiCell = true)
     val bb = `type`.decompose(Map("k1" -> "v1", "k2" -> "v2").asJava)
-    columns(column, `type`, bb) shouldBe
+
+
+    val result = columns(column, `type`, bb)
+
+    result shouldBe
       Columns(
         column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
         column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
