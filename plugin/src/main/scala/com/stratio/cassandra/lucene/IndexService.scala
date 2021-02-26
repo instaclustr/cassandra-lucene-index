@@ -237,7 +237,6 @@ abstract class IndexService(
   def upsert(key: DecoratedKey, row: Row, nowInSec: Int) {
     if (!excludedDataCenter) {
       queue.submitAsynchronous(key, () => {
-        synchronized {
           val partition = partitioner.partition(key)
           val clustering = row.clustering()
           val term = this.term(key, clustering)
@@ -249,8 +248,10 @@ abstract class IndexService(
             } else {
               val doc = new Document
               keyIndexableFields(key, clustering).foreach(doc.add)
-              fields.forEach(doc add _)
+              fields.forEach(f => doc.add(f))
+              logger.info(s"UPSERTING $key")
               lucene.upsert(partition, term, doc)
+              logger.info(s"UPSERTED $key")
             }
           } catch {
             case ex: Throwable => {
@@ -259,7 +260,6 @@ abstract class IndexService(
               throw ex
             }
           }
-        }
       })
     }
   }

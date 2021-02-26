@@ -17,6 +17,7 @@ package com.stratio.cassandra.lucene.index
 
 import java.nio.file.Path
 
+import com.stratio.cassandra.lucene.util.Logging
 import org.apache.cassandra.io.util.FileUtils
 import org.apache.lucene.analysis.Analyzer
 import org.apache.lucene.document.Document
@@ -42,7 +43,7 @@ class FSIndex(
     refreshSeconds: Double,
     ramBufferMB: Int,
     maxMergeMB: Int,
-    maxCachedMB: Int) {
+    maxCachedMB: Int) extends Logging {
 
   private[this] var mergeSort: Sort = _
   private[this] var fields: java.util.Set[String] = _
@@ -100,7 +101,9 @@ class FSIndex(
     * @param document the document to be added
     */
   def upsert(term: Term, document: Document) {
+    logger.info(s"WRITING $term")
     writer.updateDocument(term, document)
+    logger.info(s"WRITTEN $term")
   }
 
   /** Deletes all the documents containing the specified term.

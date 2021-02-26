@@ -25,6 +25,7 @@ import com.github.nosan.embedded.cassandra.Cassandra;
 import com.github.nosan.embedded.cassandra.Version;
 import com.github.nosan.embedded.cassandra.WorkingDirectoryDestroyer;
 import com.github.nosan.embedded.cassandra.commons.function.IOSupplier;
+import com.github.nosan.embedded.cassandra.commons.logging.Slf4jLogger;
 import com.stratio.cassandra.lucene.testsAT.util.CassandraConnection;
 import org.junit.AfterClass;
 import org.junit.Assert;

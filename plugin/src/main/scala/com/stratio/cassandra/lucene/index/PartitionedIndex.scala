@@ -158,8 +158,15 @@ class PartitionedIndex(
     * @param document  the document to be added
     */
   def upsert(partition: Int, term: Term, document: Document) {
-    logger.info(s"Indexing $document with term $term in $name in partition $partition")
-    indexes(partition).upsert(term, document)
+//    synchronized {
+      logger.info(s"Indexing $document with term $term in $name in partition $partition")
+      val index = indexes(partition)
+
+      if (index == null)
+        logger.info("INDEX IS NULL!")
+
+      index.upsert(term, document)
+//    }
   }
 
   /** Deletes all the documents containing the specified term.

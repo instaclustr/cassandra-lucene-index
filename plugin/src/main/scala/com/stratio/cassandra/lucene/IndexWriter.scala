@@ -113,12 +113,15 @@ abstract class IndexWriter(
 
   /** @inheritdoc */
   override final def finish() {
-
     // Skip on cleanups
     if (transactionType == CLEANUP) return
 
+    logger.info(s"FININSHING $key")
+
     // Finish with mutual exclusion on partition
     service.readBeforeWriteLocker.run(key, () => commit())
+
+    logger.info("FININSHED")
   }
 
   /** Commits all pending writes */

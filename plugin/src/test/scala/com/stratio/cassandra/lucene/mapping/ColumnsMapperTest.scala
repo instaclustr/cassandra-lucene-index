@@ -59,61 +59,63 @@ class ColumnsMapperTest extends BaseScalaTest {
 //    test(timestamp, new Date)
 //    test(boolean, true.asInstanceOf[java.lang.Boolean])
 //  }
-//
-//  test("columns from frozen set") {
-//    val column = Column("cell")
-//    val `type` = set(utf8, multiCell = false)
-//    val bb = `type`.decompose(Set("a", "b").asJava)
-//    columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
-//  }
-//
-//  test("columns from frozen list") {
-//    val column = Column("cell")
-//    val `type` = list(utf8, multiCell = false)
-//    val bb = `type`.decompose(List("a", "b").asJava)
-//    columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
-//  }
-//
-//  test("columns from tuple") {
-//    val column = Column("cell")
-//    val `type` = new TupleType(Lists.newArrayList(utf8, utf8))
-//    val bb = TupleType.buildValue(Array(utf8.decompose("a"), utf8.decompose("b")))
-//    columns(column, `type`, bb) shouldBe
-//      Columns(column.withUDTName("0").withValue("a"), column.withUDTName("1").withValue("b"))
-//  }
-//
-//  test("columns from frozen map") {
-//    val column = Column("cell")
-//    val `type` = map(utf8, utf8, multiCell = true)
-//    val bb = `type`.decompose(Map("k1" -> "v1", "k2" -> "v2").asJava)
-//    columns(column, `type`, bb) shouldBe
-//      Columns(
-//        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
-//        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
-//        column.withMapName("k2").withValue("v2"),
-//        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k1"),
-//        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v1"),
-//        column.withMapName("k1").withValue("v1"))
-//  }
-//
-//  test("columns from UDT") {
-//    val column = Column("cell")
-//    val `type` = udt(List("a", "b"), List(utf8, utf8))
-//    val bb = TupleType.buildValue(Array(utf8.decompose("1"), utf8.decompose("2")))
-//
-//    columns(column, `type`, bb) shouldBe
-//      Columns(column.withUDTName("a").withValue("1"), column.withUDTName("b").withValue("2"))
-//  }
-//
-//  test("columns from regular cell") {
-//    val columnDefinition = ColumnMetadata.regularColumn("ks", "cf", "cell", utf8)
-//    val cell = new BufferCell(
-//      columnDefinition,
-//      System.currentTimeMillis(),
-//      Cell.NO_TTL,
-//      Cell.NO_DELETION_TIME,
-//      utf8.decompose("a"),
-//      null)
-//    columns(cell) shouldBe Columns(Column("cell").withValue("a"))
-//  }
+
+  test("columns from frozen set") {
+    val column = Column("cell")
+    val `type` = set(utf8, multiCell = true)
+    val bb = `type`.decompose(Set("a", "b").asJava)
+    val result: Columns = columns(column, `type`, bb)
+
+    result shouldBe Columns(column.withValue("b"), column.withValue("a"))
+  }
+
+  test("columns from frozen list") {
+    val column = Column("cell")
+    val `type` = list(utf8, multiCell = false)
+    val bb = `type`.decompose(List("a", "b").asJava)
+    columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
+  }
+
+  test("columns from tuple") {
+    val column = Column("cell")
+    val `type` = new TupleType(Lists.newArrayList(utf8, utf8))
+    val bb = TupleType.buildValue(Array(utf8.decompose("a"), utf8.decompose("b")))
+    columns(column, `type`, bb) shouldBe
+      Columns(column.withUDTName("0").withValue("a"), column.withUDTName("1").withValue("b"))
+  }
+
+  test("columns from frozen map") {
+    val column = Column("cell")
+    val `type` = map(utf8, utf8, multiCell = true)
+    val bb = `type`.decompose(Map("k1" -> "v1", "k2" -> "v2").asJava)
+    columns(column, `type`, bb) shouldBe
+      Columns(
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
+        column.withMapName("k2").withValue("v2"),
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k1"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v1"),
+        column.withMapName("k1").withValue("v1"))
+  }
+
+  test("columns from UDT") {
+    val column = Column("cell")
+    val `type` = udt(List("a", "b"), List(utf8, utf8))
+    val bb = TupleType.buildValue(Array(utf8.decompose("1"), utf8.decompose("2")))
+
+    columns(column, `type`, bb) shouldBe
+      Columns(column.withUDTName("a").withValue("1"), column.withUDTName("b").withValue("2"))
+  }
+
+  test("columns from regular cell") {
+    val columnDefinition = ColumnMetadata.regularColumn("ks", "cf", "cell", utf8)
+    val cell = new BufferCell(
+      columnDefinition,
+      System.currentTimeMillis(),
+      Cell.NO_TTL,
+      Cell.NO_DELETION_TIME,
+      utf8.decompose("a"),
+      null)
+    columns(cell) shouldBe Columns(Column("cell").withValue("a"))
+  }
 }
