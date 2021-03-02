@@ -44,14 +44,14 @@ public class BaseIT {
 
     @BeforeClass
     public static void connect() throws InterruptedException {
-        cassandra = BaseIT.getCassandra();
-        BaseIT.cassandra.start();
+        //cassandra = BaseIT.getCassandra();
+        //BaseIT.cassandra.start();
         CassandraConnection.connect();
     }
 
     @AfterClass
     public static void destroy() {
-        BaseIT.cassandra.stop();
+        //BaseIT.cassandra.stop();
     }
 
     private <T> void assertPure(String msg, int count, T expected, Callable<T> callable) throws Exception {

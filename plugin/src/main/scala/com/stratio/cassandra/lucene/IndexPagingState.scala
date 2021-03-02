@@ -202,7 +202,7 @@ class IndexPagingState(var remaining: Int) {
     */
   def toByteBuffer: ByteBuffer = {
     val entryValues = entries.map { case ((partition, key), clustering) =>
-      val clusteringValues: Array[ByteBuffer] = clustering.getRawValues.asInstanceOf[Array[ByteBuffer]]
+      val clusteringValues: Array[ByteBuffer] = clustering.getBufferArray
       val values = new Array[ByteBuffer](2 + clusteringValues.length)
       values(0) = Int32Type.instance.decompose(partition)
       values(1) = key.getKey
