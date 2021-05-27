@@ -17,7 +17,7 @@ package com.stratio.cassandra.lucene.partitioning
 
 import com.stratio.cassandra.lucene.IndexException
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
+import org.scalatestplus.junit.JUnitRunner
 import com.stratio.cassandra.lucene.BaseScalaTest._
 import org.apache.cassandra.db.marshal.CompositeType
 import org.apache.cassandra.dht.Murmur3Partitioner
@@ -75,7 +75,7 @@ class PartitionerOnColumnTest extends PartitionerTest {
 
   test("composite key") {
     val validator = CompositeType.getInstance(int32, utf8)
-    val bb = validator.builder().add(int32.decompose(3)).add(utf8.decompose("v1")).build
+    val bb = validator.decompose(new Integer(3), "v1")
     val key = Murmur3Partitioner.instance.decorateKey(bb)
     PartitionerOnColumn(10, "c", 0, validator).partition(key) shouldBe 5
     PartitionerOnColumn(10, "c", 1, validator).partition(key) shouldBe 3

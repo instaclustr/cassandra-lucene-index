@@ -42,10 +42,10 @@ class IndexReaderWide(
   private[this] val comparator = service.metadata.comparator
   private[this] var nextDoc: Document = _
 
-  private[this] def readClusterings(key: DecoratedKey): java.NavigableSet[Clustering] = {
-    val clusterings = new java.TreeSet[Clustering](comparator)
+  private[this] def readClusterings(key: DecoratedKey): java.NavigableSet[Clustering[_]] = {
+    val clusterings = new java.TreeSet[Clustering[_]](comparator)
     var clustering = service.clustering(nextDoc)
-    var lastClustering: Clustering = null
+    var lastClustering: Clustering[_] = null
     var continue = true
     while (continue && nextDoc != null && key.getKey == service.decoratedKey(nextDoc).getKey &&
       (lastClustering == null || comparator.compare(lastClustering, clustering) < 0)) {

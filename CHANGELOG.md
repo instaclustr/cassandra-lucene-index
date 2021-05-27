@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.0-rc1 (May 31, 2021)
+
+* Upgrade to Apache Cassandra 4.0-rc1
+
 ## 3.11.1.0 (December 27, 2017)
 
 * Upgrade to Apache Cassandra 3.11.1

@@ -179,8 +179,8 @@ class GroupPostProcessor(service: IndexService) extends IndexPostProcessor[Group
 
   /** @inheritdoc */
   override def apply(partitions: PartitionIterator, group: Group): PartitionIterator = {
-    if (!partitions.hasNext || group.commands.size <= 1) return partitions
-    val search = service.expressionMapper.search(group.commands.get(0))
+    if (!partitions.hasNext || group.queries.size <= 1) return partitions
+    val search = service.expressionMapper.search(group.queries.get(0))
     process(partitions, search, group.limits.count, group.nowInSec)
   }
 

@@ -78,14 +78,20 @@ private class TaskQueueAsync(numThreads: Int, queuesSize: Int) extends TaskQueue
   private val pools = (1 to numThreads)
     .map(_ => new ArrayBlockingQueue[Runnable](queuesSize, true))
     .map(q => new ThreadPoolExecutor(1, 1, 1, DAYS, q,
-      new BasicThreadFactory.Builder().namingPattern("lucene-indexer-%d").build(),
-      (task, executor) => if (!executor.isShutdown) executor.getQueue.put(task)))
+                                     new BasicThreadFactory.Builder().namingPattern("lucene-indexer-%d").build(),
+                                     (task: Runnable, executor: ThreadPoolExecutor) => if (!executor.isShutdown) {
+                                       executor.getQueue.put(task)
+                                     }))
 
   /** @inheritdoc */
   override def submitAsynchronous[A](id: AnyRef, task: () => A): Unit = {
     lock.readLock.lock()
     try {
-      pools(Math.abs(id.hashCode % numThreads)).submit(() => task.apply())
+        pools(Math.abs(id.hashCode % numThreads)).submit(new Runnable {
+        override def run(): Unit = {
+          task.apply()
+        }
+      })
     } catch {
       case e: Exception =>
         logger.error("Task queue asynchronous submission failed", e)

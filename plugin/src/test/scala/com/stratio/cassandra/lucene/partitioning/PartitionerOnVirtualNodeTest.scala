@@ -96,7 +96,7 @@ class PartitionerOnVirtualNodeTest extends PartitionerTest {
 
   test("composite key") {
     val validator = CompositeType.getInstance(int32, utf8)
-    val bb = validator.builder().add(int32.decompose(3)).add(utf8.decompose("v1")).build
+    val bb = validator.decompose(new Integer(3), "v1")
     val key = Murmur3Partitioner.instance.decorateKey(bb)
 
     val tokens = List(-9223372036854775808l,

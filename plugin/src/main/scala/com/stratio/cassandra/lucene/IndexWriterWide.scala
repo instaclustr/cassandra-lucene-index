@@ -42,10 +42,10 @@ class IndexWriterWide(
   extends IndexWriter(service, key, nowInSec, opGroup, transactionType) {
 
   /** The clustering keys of the rows needing read before write. */
-  private val clusterings = new java.util.TreeSet[Clustering](metadata.comparator)
+  private val clusterings = new java.util.TreeSet[Clustering[_]](metadata.comparator)
 
   /** The rows ready to be written. */
-  private val rows = new java.util.TreeMap[Clustering, Row](metadata.comparator)
+  private val rows = new java.util.TreeMap[Clustering[_], Row](metadata.comparator)
 
   /** @inheritdoc */
   override def delete() {
@@ -76,8 +76,7 @@ class IndexWriterWide(
 
   /** @inheritdoc */
   override def commit() {
-
-    var rowsToDelete = new ListBuffer[Clustering]()
+    var rowsToDelete = new ListBuffer[Clustering[_]]()
 
     // Read required rows from storage engine
     if (!clusterings.isEmpty) {

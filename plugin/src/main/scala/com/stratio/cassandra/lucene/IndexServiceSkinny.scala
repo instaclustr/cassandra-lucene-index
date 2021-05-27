@@ -58,13 +58,13 @@ class IndexServiceSkinny(table: ColumnFamilyStore, index: IndexMetadata)
   }
 
   /** @inheritdoc */
-  override def keyIndexableFields(key: DecoratedKey, clustering: Clustering)
+  override def keyIndexableFields(key: DecoratedKey, clustering: Clustering[_])
   : List[IndexableField] = {
     List(tokenMapper.indexableField(key), partitionMapper.indexableField(key))
   }
 
   /** @inheritdoc */
-  override def term(key: DecoratedKey, clustering: Clustering): Term = {
+  override def term(key: DecoratedKey, clustering: Clustering[_]): Term = {
     partitionMapper.term(key)
   }
 
@@ -89,7 +89,7 @@ class IndexServiceSkinny(table: ColumnFamilyStore, index: IndexMetadata)
   }
 
   /** @inheritdoc */
-  override def after(key: DecoratedKey, clustering: Clustering): Term = {
+  override def after(key: DecoratedKey, clustering: Clustering[_]): Term = {
     partitionMapper.term(key)
   }
 

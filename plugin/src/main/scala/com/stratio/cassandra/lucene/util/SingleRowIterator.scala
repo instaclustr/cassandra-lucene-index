@@ -17,9 +17,9 @@ package com.stratio.cassandra.lucene.util
 
 import java.util.Collections
 
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.rows.{Row, RowIterator}
-import org.apache.cassandra.db.{DecoratedKey, PartitionColumns}
+import org.apache.cassandra.db.{DecoratedKey, RegularAndStaticColumns}
+import org.apache.cassandra.schema.TableMetadata
 
 /** [[RowIterator]] representing a single CQL [[Row]], gotten from the head position of the
   * specified [[RowIterator]]. Any other rows in the specified iterator won't be read.
@@ -53,13 +53,13 @@ class SingleRowIterator(
   }
 
   /** @inheritdoc */
-  override def metadata: CFMetaData = _metadata
+  override def metadata: TableMetadata = _metadata
 
   /** @inheritdoc */
   override def isReverseOrder: Boolean = false
 
   /** @inheritdoc */
-  override def columns: PartitionColumns = _columns
+  override def columns: RegularAndStaticColumns = _columns
 
   /** @inheritdoc */
   override def partitionKey: DecoratedKey = _partitionKey

@@ -184,13 +184,13 @@ public class BitemporalMapperTest extends AbstractMapperTest {
         BitemporalDateTime dateTime = new BitemporalDateTime(date);
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").pattern(pattern).build("f");
         Columns columns;
-        columns = Columns.empty().add("vtFrom", value);
+        columns = new Columns().add("vtFrom", value);
         assertEquals("Wrong VT from date parsing", dateTime, mapper.readBitemporalDate(columns, "vtFrom"));
-        columns = Columns.empty().add("vtTo", value);
+        columns = new Columns().add("vtTo", value);
         assertEquals("Wrong VT to date parsing", dateTime, mapper.readBitemporalDate(columns, "vtTo"));
-        columns = Columns.empty().add("ttFrom", value);
+        columns = new Columns().add("ttFrom", value);
         assertEquals("Wrong TT from date parsing", dateTime, mapper.readBitemporalDate(columns, "ttFrom"));
-        columns = Columns.empty().add("ttTo", value);
+        columns = new Columns().add("ttTo", value);
         assertEquals("Wrong TT to date parsing", dateTime, mapper.readBitemporalDate(columns, "ttTo"));
     }
 
@@ -245,7 +245,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsWithVtToSmallerThanVtFromFromLongColumn() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").pattern("y").build("f");
-        Columns columns = Columns.empty().add("vtFrom", 5L)
+        Columns columns = new Columns().add("vtFrom", 5L)
                                        .add("vtTo", 0L)
                                        .add("ttFrom", 0L)
                                        .add("ttTo", 0L);
@@ -255,7 +255,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsWithTtToSmallerThanTtFromFromLongColumn() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").pattern("y").build("f");
-        Columns columns = Columns.empty().add("vtFrom", 0L)
+        Columns columns = new Columns().add("vtFrom", 0L)
                                        .add("vtTo", 0L)
                                        .add("ttFrom", 5L)
                                        .add("ttTo", 0L);
@@ -289,7 +289,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     public void testAddFieldsT1() {
         String nowValue = "2100/01/01 00:00:00.001 GMT";
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").nowValue(nowValue).build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", nowValue)
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
@@ -302,7 +302,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     public void testAddFieldsT2() {
         String nowValue = "2100/01/01 00:00:00.000 GMT";
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").nowValue(nowValue).build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
@@ -315,7 +315,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     public void testAddFieldsT3() {
         String nowValue = "2100/01/01 00:00:00.000 GMT";
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").nowValue(nowValue).build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", nowValue)
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
@@ -327,7 +327,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test
     public void testAddFieldsT4() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
@@ -339,7 +339,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test
     public void testAddFieldsAllNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty();
+        Columns columns = new Columns();
         List<IndexableField> fields = mapper.indexableFields(columns);
         assertEquals("Null columns should produce no fields", 0, fields.size());
     }
@@ -347,7 +347,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsVtFromNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttTo", "2015/02/28 01:02:03.004 GMT");
@@ -357,7 +357,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsVtToNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttTo", "2015/02/28 01:02:03.004 GMT");
@@ -367,7 +367,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsTtFromNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttTo", "2015/02/28 01:02:03.004 GMT");
@@ -377,7 +377,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsTtToNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT");
@@ -387,7 +387,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsVtFromAfterVtToNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.005 GMT")
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.004 GMT")
@@ -398,7 +398,7 @@ public class BitemporalMapperTest extends AbstractMapperTest {
     @Test(expected = IndexException.class)
     public void testAddFieldsTtFromAfterTtToNull() {
         BitemporalMapper mapper = bitemporalMapper("vtFrom", "vtTo", "ttFrom", "ttTo").build("f");
-        Columns columns = Columns.empty()
+        Columns columns = new Columns()
                                  .add("vtFrom", "2015/02/28 01:02:03.004 GMT")
                                  .add("vtTo", "2015/02/28 01:02:03.004 GMT")
                                  .add("ttFrom", "2015/02/28 01:02:03.005 GMT")

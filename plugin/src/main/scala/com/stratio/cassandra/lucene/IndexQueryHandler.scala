@@ -22,8 +22,10 @@ import com.stratio.cassandra.lucene.IndexQueryHandler._
 import com.stratio.cassandra.lucene.partitioning.Partitioner
 import com.stratio.cassandra.lucene.util.{Logging, TimeCounter}
 import org.apache.cassandra.cql3._
+import org.apache.cassandra.cql3.selection.Selection.Selectors
 import org.apache.cassandra.cql3.statements.RequestValidations.checkNotNull
-import org.apache.cassandra.cql3.statements.{BatchStatement, IndexTarget, ParsedStatement, SelectStatement}
+import org.apache.cassandra.cql3.statements.schema.IndexTarget
+import org.apache.cassandra.cql3.statements.{BatchStatement, SelectStatement}
 import org.apache.cassandra.db.SinglePartitionReadCommand.Group
 import org.apache.cassandra.db._
 import org.apache.cassandra.db.filter.RowFilter.{CustomExpression, Expression}
@@ -47,18 +49,17 @@ class IndexQueryHandler extends QueryHandler with Logging {
   type Payload = java.util.Map[String, ByteBuffer]
 
   /** @inheritdoc */
-  override def prepare(query: String, state: QueryState, payload: Payload): Prepared = {
-    QueryProcessor.instance.prepare(query, state)
+  override def prepare(query: String, state: ClientState, payload: Payload): ResultMessage.Prepared = {
+    QueryProcessor.instance.prepare(query, state, payload)
   }
 
   /** @inheritdoc */
-  override def getPrepared(id: MD5Digest): ParsedStatement.Prepared = {
+  override def getPrepared(id: MD5Digest): QueryHandler.Prepared = {
     QueryProcessor.instance.getPrepared(id)
   }
 
-  /** @inheritdoc */
-  override def getPreparedForThrift(id: Integer): ParsedStatement.Prepared = {
-    QueryProcessor.instance.getPreparedForThrift(id)
+  override def parse(queryString: String, queryState: QueryState, options: QueryOptions): CQLStatement = {
+    QueryProcessor.parseStatement(queryString, queryState.getClientState)
   }
 
   /** @inheritdoc */
@@ -82,23 +83,12 @@ class IndexQueryHandler extends QueryHandler with Logging {
     processStatement(statement, state, options, queryStartNanoTime)
   }
 
-  /** @inheritdoc */
-  override def process(
-      query: String,
-      state: QueryState,
-      options: QueryOptions,
-      payload: Payload,
-      queryStartNanoTime: Long): ResultMessage = {
-    val p = QueryProcessor.getStatement(query, state.getClientState)
-    options.prepare(p.boundNames)
-    val prepared = p.statement
-    if (prepared.getBoundTerms != options.getValues.size) {
-      throw new InvalidRequestException("Invalid amount of bind variables")
-    }
-    if (!state.getClientState.isInternal) {
-      QueryProcessor.metrics.regularStatementsExecuted.inc()
-    }
-    processStatement(prepared, state, options, queryStartNanoTime)
+  override def process(statement: CQLStatement,
+                       state: QueryState,
+                       options: QueryOptions,
+                       customPayload: java.util.Map[String, ByteBuffer],
+                       queryStartNanoTime: Long): ResultMessage = {
+    processStatement(statement, state, options, queryStartNanoTime)
   }
 
   def processStatement(
@@ -106,11 +96,6 @@ class IndexQueryHandler extends QueryHandler with Logging {
       state: QueryState,
       options: QueryOptions,
       queryStartNanoTime: Long): ResultMessage = {
-
-    logger.trace(s"Process $statement @CL.${options.getConsistency}")
-    val clientState = state.getClientState
-    statement.checkAccess(clientState)
-    statement.validate(clientState)
 
     // Intercept Lucene index searches
     statement match {
@@ -136,6 +121,11 @@ class IndexQueryHandler extends QueryHandler with Logging {
       options: QueryOptions): Map[Expression, Index] = {
     val map = mutable.LinkedHashMap.empty[Expression, Index]
     val expressions = select.getRowFilter(options).getExpressions
+
+    if (select.keyspace() == "system_virtual_schema") {
+      return Map.empty
+    }
+
     val cfs = Keyspace.open(select.keyspace).getColumnFamilyStore(select.columnFamily)
     val indexes = cfs.indexManager.listIndexes.asScala.collect { case index: Index => index }
     expressions.forEach {
@@ -151,11 +141,10 @@ class IndexQueryHandler extends QueryHandler with Logging {
     map.toMap
   }
 
-  def execute(
-      statement: CQLStatement,
-      state: QueryState,
-      options: QueryOptions,
-      queryStartNanoTime: Long): ResultMessage = {
+  def execute(statement: CQLStatement,
+              state: QueryState,
+              options: QueryOptions,
+              queryStartNanoTime: Long): ResultMessage = {
     val result = statement.execute(state, options, queryStartNanoTime)
     if (result == null) new ResultMessage.Void else result
   }
@@ -206,8 +195,9 @@ class IndexQueryHandler extends QueryHandler with Logging {
     // Check consistency level
     val consistency = options.getConsistency
     checkNotNull(consistency, "Invalid empty consistency level")
-    consistency.validateForRead(select.keyspace)
+    consistency.validateForRead()
 
+    val filter = select.queriedColumns()
     val now = FBUtilities.nowInSeconds
     val limit = select.getLimit(options)
     val userPerPartitionLimit = select.getPerPartitionLimit(options)
@@ -216,15 +206,17 @@ class IndexQueryHandler extends QueryHandler with Logging {
     // Read paging state and write it to query
     val pagingState = IndexPagingState.build(options.getPagingState, limit)
     val remaining = Math.min(page, pagingState.remaining)
-    val query = select.getQuery(options, now, remaining, userPerPartitionLimit, page)
+    val query = select.getQuery(options, filter, now, remaining, userPerPartitionLimit, page)
     pagingState.rewrite(query)
 
     // Read data
     val data = query match {
-      case group: Group if group.commands.size > 1 =>
+      case group: Group if group.queries.size > 1 =>
         LuceneStorageProxy.read(group, consistency, queryStartNanoTime)
       case _ => query.execute(consistency, state.getClientState, queryStartNanoTime)
     }
+
+    val selectors = select.getSelection.newSelectors(options)
 
     // Process data updating paging state
     try {
@@ -233,6 +225,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
         select,
         processedData,
         options,
+        selectors,
         now.asInstanceOf[AnyRef],
         page.asInstanceOf[AnyRef]).asInstanceOf[Rows]
       rows.result.metadata.setHasMorePages(pagingState.toPagingState)
@@ -247,7 +240,12 @@ class IndexQueryHandler extends QueryHandler with Logging {
 object IndexQueryHandler {
 
   val processResults = classOf[SelectStatement].getDeclaredMethod(
-    "processResults", classOf[PartitionIterator], classOf[QueryOptions], classOf[Int], classOf[Int])
+    "processResults",
+    classOf[PartitionIterator],
+    classOf[QueryOptions],
+    classOf[Selectors],
+    classOf[Int],
+    classOf[Int])
   processResults.setAccessible(true)
 
   /** Sets this query handler as the Cassandra CQL query handler, replacing the previous one. */

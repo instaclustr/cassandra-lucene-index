@@ -67,7 +67,7 @@ abstract class IndexWriter(
 
   /** @inheritdoc */
   override def updateRow(oldRowData: Row, newRowData: Row): Unit = {
-    logger.trace(s"Update row during $transactionType: $oldRowData TO $newRowData")
+    logger.trace(s"Update row during $transactionType: $oldRowData TO $newRowData on key $key")
     tryIndex(newRowData)
   }
 
@@ -113,7 +113,6 @@ abstract class IndexWriter(
 
   /** @inheritdoc */
   override final def finish() {
-
     // Skip on cleanups
     if (transactionType == CLEANUP) return
 

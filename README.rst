@@ -3,9 +3,9 @@ Cassandra Lucene Index
 ================================
 Instaclustr maintains this fork of the Cassandra Lucene index after Stratio (the orginal developers) discontinued support. See https://www.instaclustr.com/instaclustr-support-cassandra-lucene-index/ for details.
 
-================================
-Stratio’s Cassandra Lucene Index
-================================
+=======================================================
+Stratio’s Cassandra Lucene Index adopted by Instaclustr
+=======================================================
 
 Stratio’s Cassandra Lucene Index is
 a plugin for `Apache Cassandra <http://cassandra.apache.org/>`__ that extends its index functionality to provide near

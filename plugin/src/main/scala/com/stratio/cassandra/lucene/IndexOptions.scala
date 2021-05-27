@@ -19,12 +19,11 @@ import java.io.File
 import java.nio.file.{Path, Paths}
 
 import com.stratio.cassandra.lucene.IndexOptions._
-import com.stratio.cassandra.lucene.partitioning.{PartitionerOnNone, Partitioner}
+import com.stratio.cassandra.lucene.partitioning.{Partitioner, PartitionerOnNone}
 import com.stratio.cassandra.lucene.schema.{Schema, SchemaBuilder}
 import com.stratio.cassandra.lucene.util.SchemaValidator
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.Directories
-import org.apache.cassandra.schema.IndexMetadata
+import org.apache.cassandra.schema.{IndexMetadata, TableMetadata}
 
 import scala.collection.JavaConverters._
 
@@ -34,7 +33,7 @@ import scala.collection.JavaConverters._
   * @param indexMetadata the index metadata
   * @author Andres de la Pena `adelapena@stratio.com`
   */
-class IndexOptions(tableMetadata: CFMetaData, indexMetadata: IndexMetadata) {
+class IndexOptions(tableMetadata: TableMetadata, indexMetadata: IndexMetadata) {
 
   val options = indexMetadata.options.asScala.toMap
 
@@ -112,7 +111,7 @@ object IndexOptions {
     * @param options  the options to be validated
     * @param metadata the indexed table metadata
     */
-  def validate(options: java.util.Map[String, String], metadata: CFMetaData) {
+  def validate(options: java.util.Map[String, String], metadata: TableMetadata) {
     val o = options.asScala.toMap
     parseRefresh(o)
     parseRamBufferMB(o)
@@ -159,7 +158,7 @@ object IndexOptions {
 
   def parsePath(
       options: Map[String, String],
-      table: CFMetaData,
+      table: TableMetadata,
       index: Option[IndexMetadata]): Path = {
     options.get(DIRECTORY_PATH_OPTION).map(Paths.get(_)).getOrElse(
       index.map(
@@ -170,7 +169,7 @@ object IndexOptions {
         }).orNull)
   }
 
-  def parseSchema(options: Map[String, String], table: CFMetaData): Schema = {
+  def parseSchema(options: Map[String, String], table: TableMetadata): Schema = {
     options.get(SCHEMA_OPTION).map(
       value => try {
         val schema = SchemaBuilder.fromJson(value).build
@@ -182,7 +181,7 @@ object IndexOptions {
       }).getOrElse(throw new IndexException(s"'$SCHEMA_OPTION' is required"))
   }
 
-  def parsePartitioner(options: Map[String, String], table: CFMetaData): Partitioner = {
+  def parsePartitioner(options: Map[String, String], table: TableMetadata): Partitioner = {
     options.get(PARTITIONER_OPTION).map(
       value => try {
         Partitioner.fromJson(table, value)
@@ -192,7 +191,7 @@ object IndexOptions {
       }).getOrElse(DEFAULT_PARTITIONER)
   }
 
-  def parseSparse(options: Map[String, String], table: CFMetaData): Boolean = {
+  def parseSparse(options: Map[String, String], table: TableMetadata): Boolean = {
     options.get(SPARSE_OPTION).map(
       value => try value.toBoolean catch {
         case e: Exception => throw new IndexException(e,

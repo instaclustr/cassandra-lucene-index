@@ -17,9 +17,9 @@ package com.stratio.cassandra.lucene.partitioning
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.stratio.cassandra.lucene.IndexException
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db._
 import org.apache.cassandra.dht.Token
+import org.apache.cassandra.schema.TableMetadata
 
 /** [[Partitioner]] based on the partition key token. Rows will be stored in an index partition
   * determined by the hash of the partition key token. Partition-directed searches will be routed to
@@ -67,7 +67,7 @@ object PartitionerOnToken {
     * @param partitions the number of index partitions per node
     */
   case class Builder(@JsonProperty("partitions") partitions: Int) extends Partitioner.Builder {
-    override def build(metadata: CFMetaData): PartitionerOnToken = PartitionerOnToken(partitions)
+    override def build(metadata: TableMetadata): PartitionerOnToken = PartitionerOnToken(partitions)
   }
 
 }

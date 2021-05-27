@@ -24,14 +24,14 @@ import com.stratio.cassandra.lucene.IndexException
 import com.stratio.cassandra.lucene.column.Column
 import com.stratio.cassandra.lucene.schema.Schema
 import com.typesafe.scalalogging.Logger
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.marshal._
+import org.apache.cassandra.schema.TableMetadata
 import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
-/** Object for validating a [[Schema]] against a [[CFMetaData]].
+/** Object for validating a [[Schema]] against a [[TableMetadata]].
   *
   * @author Andres de la Pena `adelapena@stratio.com`
   */
@@ -39,19 +39,19 @@ object SchemaValidator {
 
   protected val logger: Logger = Logger(LoggerFactory.getLogger(getClass.getName))
 
-  /** Validates the specified [[Schema]] against the specified [[CFMetaData]].
+  /** Validates the specified [[Schema]] against the specified [[TableMetadata]].
     *
     * @param schema   a schema
     * @param metadata a table metadata
     */
-  def validate(schema: Schema, metadata: CFMetaData): Unit = {
+  def validate(schema: Schema, metadata: TableMetadata): Unit = {
     for (mapper <- schema.mappers.values.asScala; column <- mapper.mappedColumns.asScala) {
       validate(metadata, column, mapper.field, mapper.supportedTypes.asScala.toList, mapper.excludedTypes.asScala.toList, mapper.supportsCollections)
     }
   }
 
   def validate(
-      metadata: CFMetaData,
+      metadata: TableMetadata,
       column: String,
       field: String,
       supportedTypes: List[Class[_]],
@@ -60,7 +60,7 @@ object SchemaValidator {
 
 
     val cellName = Column.parseCellName(column)
-    val cellDefinition = metadata.getColumnDefinition(UTF8Type.instance.decompose(cellName))
+    val cellDefinition = metadata.getColumn(UTF8Type.instance.decompose(cellName))
 
     if (cellDefinition == null) {
       throw new IndexException("No column definition '{}' for mapper '{}'", cellName, field)

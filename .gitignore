@@ -19,3 +19,5 @@ hs_err_pid*
 
 # Jar
 *.jar
+
+testsAT/jts-core.jar

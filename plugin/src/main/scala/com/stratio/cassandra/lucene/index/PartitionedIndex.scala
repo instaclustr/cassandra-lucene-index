@@ -60,7 +60,7 @@ class PartitionedIndex(
         .toList
     case _ => throw new IndexException(
       s"The number of partitions should be strictly positive but found $partitions")
-  }
+    }
 
   private[this] var mergeSort: Sort = _
   private[this] var fields: java.util.Set[String] = _

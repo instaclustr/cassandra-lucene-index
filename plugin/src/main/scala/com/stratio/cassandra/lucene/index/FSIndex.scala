@@ -17,6 +17,7 @@ package com.stratio.cassandra.lucene.index
 
 import java.nio.file.Path
 
+import com.stratio.cassandra.lucene.util.Logging
 import org.apache.cassandra.io.util.FileUtils
 import org.apache.lucene.analysis.Analyzer
 import org.apache.lucene.document.Document
@@ -42,7 +43,7 @@ class FSIndex(
     refreshSeconds: Double,
     ramBufferMB: Int,
     maxMergeMB: Int,
-    maxCachedMB: Int) {
+    maxCachedMB: Int) extends Logging {
 
   private[this] var mergeSort: Sort = _
   private[this] var fields: java.util.Set[String] = _

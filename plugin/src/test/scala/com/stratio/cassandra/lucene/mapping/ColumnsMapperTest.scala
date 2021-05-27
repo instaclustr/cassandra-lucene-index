@@ -16,6 +16,7 @@
 package com.stratio.cassandra.lucene.mapping
 
 import java.math.{BigDecimal, BigInteger}
+import java.nio.ByteBuffer
 import java.util.{Date, UUID}
 
 import com.google.common.collect.Lists
@@ -23,9 +24,9 @@ import com.stratio.cassandra.lucene.BaseScalaTest
 import com.stratio.cassandra.lucene.BaseScalaTest._
 import com.stratio.cassandra.lucene.column.{Column, Columns}
 import com.stratio.cassandra.lucene.mapping.ColumnsMapper._
-import org.apache.cassandra.config.ColumnDefinition
 import org.apache.cassandra.db.marshal._
 import org.apache.cassandra.db.rows.{BufferCell, Cell}
+import org.apache.cassandra.schema.ColumnMetadata
 import org.apache.cassandra.utils.UUIDGen
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -40,30 +41,31 @@ import scala.collection.JavaConverters._
 class ColumnsMapperTest extends BaseScalaTest {
 
   test("columns from plain cells") {
-    def test[A](abstractType: AbstractType[A], value: A) = {
+    def test[A](abstractType: AbstractType[_], value: ByteBuffer) = {
       val column = Column("cell")
-      columns(column, abstractType, abstractType.decompose(value)) shouldBe
-        Columns(column.withValue(value))
+      ColumnsMapper.columns(column, abstractType, value) shouldBe
+        Columns(column.withValue(abstractType.getSerializer.deserialize(value)))
     }
-    test(ascii, "Ab")
-    test(utf8, "Ab")
-    test(int32, 7.asInstanceOf[Integer])
-    test(float, 7.3f.asInstanceOf[java.lang.Float])
-    test(long, 7l.asInstanceOf[java.lang.Long])
-    test(double, 7.3d.asInstanceOf[java.lang.Double])
-    test(integer, new BigInteger("7"))
-    test(decimal, new BigDecimal("7.3"))
-    test(uuid, UUID.randomUUID)
-    test(lexicalUuid, UUID.randomUUID)
-    test(timeUuid, UUIDGen.getTimeUUID)
-    test(timestamp, new Date)
-    test(boolean, true.asInstanceOf[java.lang.Boolean])
+
+    test(ascii, ascii.getSerializer.serialize("Ab"))
+    test(utf8, utf8.getSerializer.serialize("Ab"))
+    test(int32, int32.getSerializer.serialize(7.asInstanceOf[Integer]))
+    test(float, float.getSerializer.serialize(7.3f.asInstanceOf[java.lang.Float]))
+    test(long, long.getSerializer.serialize(7l.asInstanceOf[java.lang.Long]))
+    test(double, double.getSerializer.serialize(7.3d.asInstanceOf[java.lang.Double]))
+    test(integer, integer.getSerializer.serialize(new BigInteger("7")))
+    test(decimal, decimal.getSerializer.serialize(new BigDecimal("7.3")))
+    test(uuid, uuid.getSerializer.serialize(UUID.randomUUID))
+    test(lexicalUuid, lexicalUuid.getSerializer.serialize(UUID.randomUUID))
+    test(timeUuid, timeUuid.getSerializer.serialize(UUIDGen.getTimeUUID))
+    test(timestamp, timestamp.getSerializer.serialize(new Date))
+    test(boolean, boolean.getSerializer.serialize(true.asInstanceOf[java.lang.Boolean]))
   }
 
   test("columns from frozen set") {
     val column = Column("cell")
-    val `type` = set(utf8, multiCell = false)
-    val bb = `type`.decompose(Set("a", "b").asJava)
+    val `type` = set(utf8, multiCell = true)
+    val bb = `type`.getSerializer.serialize(Set("a", "b").asJava)
     columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
   }
 
@@ -74,18 +76,47 @@ class ColumnsMapperTest extends BaseScalaTest {
     columns(column, `type`, bb) shouldBe Columns(column.withValue("b"), column.withValue("a"))
   }
 
-  test("columns from frozen map") {
+  test("columns from list of lists") {
     val column = Column("cell")
-    val `type` = map(utf8, utf8, multiCell = true)
-    val bb = `type`.decompose(Map("k1" -> "v1", "k2" -> "v2").asJava)
-    columns(column, `type`, bb) shouldBe
-      Columns(
-        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
-        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
-        column.withMapName("k2").withValue("v2"),
-        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k1"),
-        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v1"),
-        column.withMapName("k1").withValue("v1"))
+    val `type` = list(list(utf8, multiCell = false), multiCell = false)
+    val bb = `type`.serializer.serialize(List(List("a", "b").asJava, List("c", "d").asJava).asJava)
+
+  }
+
+  test("columns from list of sets") {
+    val column = Column("cell")
+    val `type` = list(set(utf8, multiCell = true), multiCell = false)
+    val bb = `type`.getSerializer.serialize(List(Set("a", "b").asJava, Set("c", "d").asJava).asJava)
+    val cols: Columns = columns(column, `type`, bb)
+
+    cols.toSet.contains(column.withValue("a")) shouldBe true
+    cols.toSet.contains(column.withValue("b")) shouldBe true
+    cols.toSet.contains(column.withValue("c")) shouldBe true
+    cols.toSet.contains(column.withValue("d")) shouldBe true
+  }
+
+  test("columns from set of sets") {
+    val column = Column("cell")
+    val `type` = set(set(utf8, multiCell = true), multiCell = true)
+    val bb = `type`.getSerializer.serialize(Set(Set("a", "b").asJava, Set("c", "d").asJava).asJava)
+
+    val cols: Columns = columns(column, `type`, bb)
+    cols.toSet.contains(column.withValue("a")) shouldBe true
+    cols.toSet.contains(column.withValue("b")) shouldBe true
+    cols.toSet.contains(column.withValue("c")) shouldBe true
+    cols.toSet.contains(column.withValue("d")) shouldBe true
+  }
+
+  test("columns from set of lists") {
+    val column = Column("cell")
+    val `type` = set(list(utf8, multiCell = false), multiCell = true)
+    val bb = `type`.getSerializer.serialize(Set(List("a", "b").asJava, List("c", "d").asJava).asJava)
+
+    val cols: Columns = columns(column, `type`, bb)
+    cols.toSet.contains(column.withValue("a")) shouldBe true
+    cols.toSet.contains(column.withValue("b")) shouldBe true
+    cols.toSet.contains(column.withValue("c")) shouldBe true
+    cols.toSet.contains(column.withValue("d")) shouldBe true
   }
 
   test("columns from tuple") {
@@ -96,16 +127,67 @@ class ColumnsMapperTest extends BaseScalaTest {
       Columns(column.withUDTName("0").withValue("a"), column.withUDTName("1").withValue("b"))
   }
 
+  test("columns from frozen map") {
+    val column = Column("cell")
+    val `type` = map(utf8, utf8, multiCell = true)
+    val bb = `type`.decompose(Map("k1" -> "v1", "k2" -> "v2").asJava)
+
+    val result = columns(column, `type`, bb)
+
+    result shouldBe
+      Columns(
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
+        column.withMapName("k2").withValue("v2"),
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k1"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v1"),
+        column.withMapName("k1").withValue("v1"))
+  }
+
+  test("columns from list of maps") {
+    val column = Column("cell")
+    val `type` = list(map(utf8, utf8, multiCell = true), multiCell = false)
+    val bb = `type`.decompose(List(Map[String,String]("k1" -> "v1", "k2" -> "v2").asJava).asJava)
+
+    val result = columns(column, `type`, bb)
+
+    result shouldBe
+      Columns(
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
+        column.withMapName("k2").withValue("v2"),
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k1"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v1"),
+        column.withMapName("k1").withValue("v1"))
+  }
+
+  test("columns from set of maps") {
+    val column = Column("cell")
+    val `type` = set(map(utf8, utf8, multiCell = true), multiCell = false)
+    val bb = `type`.decompose(Set(Map[String,String]("k1" -> "v1", "k2" -> "v2").asJava).asJava)
+
+    val result = columns(column, `type`, bb)
+
+    result shouldBe
+      Columns(
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k2"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v2"),
+        column.withMapName("k2").withValue("v2"),
+        column.withUDTName(Column.MAP_KEY_SUFFIX).withValue("k1"),
+        column.withUDTName(Column.MAP_VALUE_SUFFIX).withValue("v1"),
+        column.withMapName("k1").withValue("v1"))
+  }
   test("columns from UDT") {
     val column = Column("cell")
     val `type` = udt(List("a", "b"), List(utf8, utf8))
     val bb = TupleType.buildValue(Array(utf8.decompose("1"), utf8.decompose("2")))
+
     columns(column, `type`, bb) shouldBe
       Columns(column.withUDTName("a").withValue("1"), column.withUDTName("b").withValue("2"))
   }
 
   test("columns from regular cell") {
-    val columnDefinition = ColumnDefinition.regularDef("ks", "cf", "cell", utf8)
+    val columnDefinition = ColumnMetadata.regularColumn("ks", "cf", "cell", utf8)
     val cell = new BufferCell(
       columnDefinition,
       System.currentTimeMillis(),
