@@ -19,28 +19,34 @@
   ~ under the License.
   -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    
+
     <parent>
         <groupId>com.instaclustr</groupId>
         <artifactId>cassandra-lucene-index-parent</artifactId>
         <version>4.0-rc1-1.0.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    
+
     <artifactId>cassandra-lucene-index-plugin</artifactId>
     <name>Cassandra Lucene Index plugin</name>
     <description>Cassandra Lucene Index plugin</description>
-    
+
     <packaging>jar</packaging>
-    
+
     <properties>
         <version.snowball-stemmer>1.3.0.581.1</version.snowball-stemmer>
         <version.findbugs>3.0.1</version.findbugs>
+        <version.jdeb>1.8</version.jdeb>
+        <version.rpm>1.5.0</version.rpm>
+        <version.scala.maven.plugin>4.4.0</version.scala.maven.plugin>
+        <version.scala>2.13.1</version.scala>
+        <outputDirectory>${project.build.directory}</outputDirectory>
+        <maintainer>smiklosovic at apache dot org</maintainer>
     </properties>
-    
+
     <dependencies>
         <dependency>
             <groupId>org.scala-lang</groupId>
@@ -128,18 +134,18 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-    
+
     <build>
         <plugins>
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
-                <version>4.4.0</version>
+                <version>${version.scala.maven.plugin}</version>
                 <configuration>
                     <args>
                         <arg>-nowarn</arg>
                     </args>
-                    <scalaVersion>2.13.1</scalaVersion>
+                    <scalaVersion>${version.scala}</scalaVersion>
                 </configuration>
                 <executions>
                     <execution>
@@ -203,6 +209,73 @@
         </plugins>
     </build>
     <profiles>
+        <profile>
+            <id>deb</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.vafer</groupId>
+                        <artifactId>jdeb</artifactId>
+                        <version>${version.jdeb}</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jdeb</goal>
+                                </goals>
+                                <configuration>
+                                    <name>${project.artifactId}</name>
+                                    <deb>${outputDirectory}/[[name]]_${project.version}.deb</deb>
+                                    <dataSet>
+                                        <data>
+                                            <src>${outputDirectory}/${project.build.finalName}.jar</src>
+                                            <type>file</type>
+                                            <mapper>
+                                                <type>perm</type>
+                                                <prefix>/usr/share/cassandra/lib</prefix>
+                                            </mapper>
+                                        </data>
+                                    </dataSet>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>rpm</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>de.dentrassi.maven</groupId>
+                        <artifactId>rpm</artifactId>
+                        <version>${version.rpm}</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>rpm</goal>
+                                </goals>
+                                <configuration>
+                                    <packageName>${project.artifactId}</packageName>
+                                    <group>Applications/Databases</group>
+                                    <packager>${maintainer}</packager>
+                                    <skipSigning>true</skipSigning>
+                                    <entries>
+                                        <entry>
+                                            <name>/usr/share/cassandra/lib/${project.build.finalName}.jar</name>
+                                            <file>${outputDirectory}/${project.build.finalName}.jar</file>
+                                        </entry>
+                                    </entries>
+                                    <targetDir>${outputDirectory}</targetDir>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>patch</id>
             <properties>

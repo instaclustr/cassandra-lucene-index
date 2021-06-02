@@ -16,7 +16,7 @@ jobs:
             - m2-{{ checksum "pom.xml" }}
             - m2-
 
-      - run: mvn clean install -DoutputDirectory=/tmp/artifacts
+      - run: mvn clean install -DoutputDirectory=/tmp/artifacts -Pdeb,rpm
 
       - save_cache:
           paths:
@@ -33,6 +33,8 @@ jobs:
           root: /tmp/artifacts
           paths:
             - "cassandra-lucene-index-plugin-*.jar"
+            - "cassandra-lucene-index-plugin-*.deb"
+            - "cassandra-lucene-index-plugin-*.rpm"
 
   publish-github-release:
     docker:
