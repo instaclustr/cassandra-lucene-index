@@ -1,6 +1,10 @@
 # Changelog
 
-## 4.0-rc1 (May 31, 2021)
+## 4.0-rc1-1.0.1 (May 31, 2021)
+
+* Addressed jackson databind CVE's
+
+## 4.0-rc1-1.0.0 (May 31, 2021)
 
 * Upgrade to Apache Cassandra 4.0-rc1
 
