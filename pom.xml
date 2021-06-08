@@ -25,7 +25,7 @@
     
     <groupId>com.instaclustr</groupId>
     <artifactId>cassandra-lucene-index-parent</artifactId>
-    <version>4.0-rc1-1.0.0</version>
+    <version>4.0-rc1-1.0.1</version>
     <packaging>pom</packaging>
     
     <name>Cassandra Lucene index</name>
@@ -96,7 +96,8 @@
     <properties>
         <cassandra.version>4.0-rc1</cassandra.version>
         
-        <jackson.version>2.9.10</jackson.version>
+        <jackson.core.version>2.9.10</jackson.core.version>
+        <jackson.databind.version>2.9.10.8</jackson.databind.version>
         <jacoco-IT-argline></jacoco-IT-argline>
         <jts.version>1.14.0</jts.version>
         <lucene.version>5.5.4</lucene.version>
