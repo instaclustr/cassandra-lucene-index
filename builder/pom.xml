@@ -26,7 +26,7 @@
     <parent>
         <groupId>com.instaclustr</groupId>
         <artifactId>cassandra-lucene-index-parent</artifactId>
-        <version>4.1.5-1.0.0</version>
+        <version>4.1.6-1.0.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 

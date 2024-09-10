@@ -35,6 +35,7 @@ import org.apache.cassandra.service.{ClientState, LuceneStorageProxy, QueryState
 import org.apache.cassandra.transport.messages.ResultMessage
 import org.apache.cassandra.transport.messages.ResultMessage.Rows
 import org.apache.cassandra.utils.{FBUtilities, MD5Digest}
+import org.apache.cassandra.transport.Dispatcher
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -68,8 +69,8 @@ class IndexQueryHandler extends QueryHandler with Logging {
       state: QueryState,
       options: BatchQueryOptions,
       payload: Payload,
-      queryStartNanoTime: Long): ResultMessage = {
-    QueryProcessor.instance.processBatch(statement, state, options, payload, queryStartNanoTime)
+      requestTime: Dispatcher.RequestTime) : ResultMessage = {
+    QueryProcessor.instance.processBatch(statement, state, options, payload, requestTime)
   }
 
   /** @inheritdoc */
@@ -78,24 +79,29 @@ class IndexQueryHandler extends QueryHandler with Logging {
       state: QueryState,
       options: QueryOptions,
       payload: Payload,
-      queryStartNanoTime: Long): ResultMessage = {
+      requestTime: Dispatcher.RequestTime): ResultMessage = {
     QueryProcessor.metrics.preparedStatementsExecuted.inc()
-    processStatement(statement, state, options, queryStartNanoTime)
+    processStatement(statement, state, options, requestTime)
   }
 
   override def process(statement: CQLStatement,
                        state: QueryState,
                        options: QueryOptions,
                        customPayload: java.util.Map[String, ByteBuffer],
-                       queryStartNanoTime: Long): ResultMessage = {
-    processStatement(statement, state, options, queryStartNanoTime)
+                       requestTime: Dispatcher.RequestTime): ResultMessage = {
+    processStatement(statement, state, options, requestTime)
   }
 
   def processStatement(
       statement: CQLStatement,
       state: QueryState,
       options: QueryOptions,
-      queryStartNanoTime: Long): ResultMessage = {
+      requestTime: Dispatcher.RequestTime): ResultMessage = {
+
+    // https://github.com/instaclustr/cassandra-lucene-index/pull/38/files
+    options.prepare(statement.getBindVariables)
+    if (statement.getBindVariables.size != options.getValues.size) throw new InvalidRequestException("Invalid amount of bind variables")
+    if (!state.getClientState.isInternal) QueryProcessor.metrics.regularStatementsExecuted.inc()
 
     // Intercept Lucene index searches
     statement match {
@@ -104,7 +110,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
         if (expressions.nonEmpty) {
           val time = TimeCounter.start
           try {
-            return executeLuceneQuery(select, state, options, expressions, queryStartNanoTime)
+            return executeLuceneQuery(select, state, options, expressions, requestTime)
           } catch {
             case e: ReflectiveOperationException => throw new IndexException(e)
           } finally {
@@ -113,7 +119,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
         }
       case _ =>
     }
-    execute(statement, state, options, queryStartNanoTime)
+    execute(statement, state, options, requestTime)
   }
 
   def luceneExpressions(
@@ -146,8 +152,8 @@ class IndexQueryHandler extends QueryHandler with Logging {
   def execute(statement: CQLStatement,
               state: QueryState,
               options: QueryOptions,
-              queryStartNanoTime: Long): ResultMessage = {
-    val result = statement.execute(state, options, queryStartNanoTime)
+              requestTime: Dispatcher.RequestTime): ResultMessage = {
+    val result = statement.execute(state, options, requestTime)
     if (result == null) new ResultMessage.Void else result
   }
 
@@ -156,7 +162,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
       state: QueryState,
       options: QueryOptions,
       expressions: Map[Expression, Index],
-      queryStartNanoTime: Long): ResultMessage = {
+      requestTime: Dispatcher.RequestTime): ResultMessage = {
 
     if (expressions.size > 1) {
       throw new InvalidRequestException(
@@ -181,9 +187,9 @@ class IndexQueryHandler extends QueryHandler with Logging {
 
     // Take control of paging if there is paging and the query requires post processing
     if (search.requiresPostProcessing && page > 0 && page < limit) {
-      executeSortedLuceneQuery(select, state, options, partitioner, queryStartNanoTime)
+      executeSortedLuceneQuery(select, state, options, partitioner, requestTime)
     } else {
-      execute(select, state, options, queryStartNanoTime)
+      execute(select, state, options, requestTime)
     }
   }
 
@@ -192,7 +198,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
       state: QueryState,
       options: QueryOptions,
       partitioner: Partitioner,
-      queryStartNanoTime: Long): Rows = {
+      requestTime: Dispatcher.RequestTime): Rows = {
 
     // Check consistency level
     val consistency = options.getConsistency
@@ -215,8 +221,8 @@ class IndexQueryHandler extends QueryHandler with Logging {
     // Read data
     val data = query match {
       case group: Group if group.queries.size > 1 =>
-        LuceneStorageProxy.read(group, consistency, queryStartNanoTime)
-      case _ => query.execute(consistency, state.getClientState, queryStartNanoTime)
+        LuceneStorageProxy.read(group, consistency, requestTime)
+      case _ => query.execute(consistency, state.getClientState, requestTime)
     }
 
     val selectors = select.getSelection.newSelectors(options)

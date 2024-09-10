@@ -36,6 +36,7 @@ import org.apache.cassandra.metrics.ClientRequestMetrics;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.reads.range.LuceneReplicaPlanIterator;
 import org.apache.cassandra.service.reads.range.LuceneReplicaPlanMerger;
+import org.apache.cassandra.transport.Dispatcher;
 //import org.apache.cassandra.service.StorageProxy.RangeIterator;
 //import org.apache.cassandra.service.StorageProxy.RangeMerger;
 
@@ -53,7 +54,7 @@ public class LuceneStorageProxy {
         try {
             systemKeyspaceQuery = StorageProxy.class.getDeclaredMethod("systemKeyspaceQuery", List.class);
             systemKeyspaceQuery.setAccessible(true);
-            fetchRows = StorageProxy.class.getDeclaredMethod("fetchRows", List.class, ConsistencyLevel.class, long.class);
+            fetchRows = StorageProxy.class.getDeclaredMethod("fetchRows", List.class, ConsistencyLevel.class, Dispatcher.RequestTime.class);
             fetchRows.setAccessible(true);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
@@ -64,14 +65,14 @@ public class LuceneStorageProxy {
         return (boolean) systemKeyspaceQuery.invoke(null, cmds);
     }
 
-    private static PartitionIterator fetchRows(List<SinglePartitionReadCommand> commands, ConsistencyLevel cl, long queryStartNanoTime)
+    private static PartitionIterator fetchRows(List<SinglePartitionReadCommand> commands, ConsistencyLevel cl, Dispatcher.RequestTime requestTime)
     throws ReflectiveOperationException {
-        return (PartitionIterator) fetchRows.invoke(null, commands, cl, queryStartNanoTime);
+        return (PartitionIterator) fetchRows.invoke(null, commands, cl, requestTime);
     }
 
     public static PartitionIterator read(SinglePartitionReadCommand.Group group,
                                          ConsistencyLevel consistencyLevel,
-                                         long queryStartNanoTime)
+                                         Dispatcher.RequestTime requestTime)
     throws UnavailableException, IsBootstrappingException, ReadFailureException, ReadTimeoutException,
            InvalidRequestException, ReflectiveOperationException {
 
@@ -80,16 +81,16 @@ public class LuceneStorageProxy {
             throw new IsBootstrappingException();
         }
 
-        return readRegular(group, consistencyLevel, queryStartNanoTime);
+        return readRegular(group, consistencyLevel, requestTime);
     }
 
     private static PartitionIterator readRegular(SinglePartitionReadCommand.Group group,
                                                  ConsistencyLevel consistencyLevel,
-                                                 long queryStartNanoTime)
+                                                 Dispatcher.RequestTime requestTime)
     throws UnavailableException, ReadFailureException, ReadTimeoutException, ReflectiveOperationException {
         long start = System.nanoTime();
         try {
-            PartitionIterator result = fetchRows(group.queries, consistencyLevel, queryStartNanoTime);
+            PartitionIterator result = fetchRows(group.queries, consistencyLevel, requestTime);
             // If we have more than one command, then despite each read command honoring the limit, the total result
             // might not honor it and so we should enforce it
             if (group.queries.size() > 1) {
