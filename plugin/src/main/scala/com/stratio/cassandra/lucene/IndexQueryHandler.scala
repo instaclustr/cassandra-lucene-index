@@ -97,7 +97,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
       state: QueryState,
       options: QueryOptions,
       requestTime: Dispatcher.RequestTime): ResultMessage = {
-    
+
     options.prepare(statement.getBindVariables)
     if (statement.getBindVariables.size != options.getValues.size) throw new InvalidRequestException("Invalid amount of bind variables")
     if (!state.getClientState.isInternal) QueryProcessor.metrics.regularStatementsExecuted.inc()
@@ -220,7 +220,7 @@ class IndexQueryHandler extends QueryHandler with Logging {
     // Read data
     val data = query match {
       case group: Group if group.queries.size > 1 =>
-        LuceneStorageProxy.read(group, consistency, requestTime.startedAtNanos())
+        LuceneStorageProxy.read(group, consistency, requestTime)
       case _ => query.execute(consistency, state.getClientState, requestTime)
     }
 
