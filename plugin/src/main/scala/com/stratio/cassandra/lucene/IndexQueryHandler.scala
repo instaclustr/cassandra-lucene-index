@@ -97,6 +97,10 @@ class IndexQueryHandler extends QueryHandler with Logging {
       options: QueryOptions,
       queryStartNanoTime: Long): ResultMessage = {
 
+    options.prepare(statement.getBindVariables)
+    if (statement.getBindVariables.size != options.getValues.size) throw new InvalidRequestException("Invalid amount of bind variables")
+    if (!state.getClientState.isInternal) QueryProcessor.metrics.regularStatementsExecuted.inc()
+
     // Intercept Lucene index searches
     statement match {
       case select: SelectStatement =>
