@@ -26,7 +26,7 @@
     <parent>
         <groupId>com.instaclustr</groupId>
         <artifactId>cassandra-lucene-index-parent</artifactId>
-        <version>4.1.6-1.0.0</version>
+        <version>4.1.8-1.0.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -42,7 +42,7 @@
         <version.findbugs>3.0.1</version.findbugs>
         <version.jdeb>1.8</version.jdeb>
         <version.rpm>1.5.0</version.rpm>
-        <version.scala.maven.plugin>4.4.0</version.scala.maven.plugin>
+        <version.scala.maven.plugin>4.9.2</version.scala.maven.plugin>
         <version.scala>2.13.1</version.scala>
         <outputDirectory>${project.build.directory}</outputDirectory>
         <maintainer>smiklosovic at apache dot org</maintainer>
