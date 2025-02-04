@@ -38,7 +38,7 @@ jobs:
 
   publish-github-release:
     docker:
-      - image: cimg/go:1.17
+      - image: cimg/go:1.22.11
     steps:
       - attach_workspace:
           at: ./artifacts
