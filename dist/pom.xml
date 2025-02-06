@@ -9,7 +9,7 @@
     <parent>
         <artifactId>cassandra-lucene-index-parent</artifactId>
         <groupId>com.instaclustr</groupId>
-        <version>3.11.17.0</version>
+        <version>3.11.19.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
