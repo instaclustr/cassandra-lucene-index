@@ -97,6 +97,8 @@ class IndexQueryHandler extends QueryHandler with Logging {
       options: QueryOptions,
       queryStartNanoTime: Long): ResultMessage = {
 
+    statement.authorize(state.getClientState);
+    statement.validate(state.getClientState);
     // Intercept Lucene index searches
     statement match {
       case select: SelectStatement =>
