@@ -78,7 +78,7 @@ class IndexReaderWide(
 
     if (clusterings.isEmpty) return prepareNext()
 
-    val filter = new ClusteringIndexNamesFilter(clusterings, false)
+    val filter = new ClusteringIndexNamesFilter(clusterings, command.isReversed)
     nextData = Some(read(key, filter))
 
     nextData.foreach(

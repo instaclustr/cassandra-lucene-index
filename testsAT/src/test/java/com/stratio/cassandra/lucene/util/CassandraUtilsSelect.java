@@ -48,6 +48,9 @@ public class CassandraUtilsSelect {
     private boolean allowFiltering = false;
     private ConsistencyLevel consistency;
     private boolean useNewQuerySyntax;
+    private String orderByColumn;
+    private boolean useOrderBy = false;
+    private Order orderByOrder;
 
     public CassandraUtilsSelect(CassandraUtils parent) {
         this.parent = parent;
@@ -143,6 +146,18 @@ public class CassandraUtilsSelect {
         return this;
     }
 
+    /**
+     * Appends ORDER BY clause to the select query.
+     * @param column is a column name by which the result should be ordered.
+     * @param orderBy is result order.
+     */
+    public CassandraUtilsSelect orderBy(String column, Order orderBy) {
+        this.useOrderBy = true;
+        this.orderByColumn = column;
+        this.orderByOrder = orderBy;
+        return this;
+    }
+
     public CassandraUtilsSelect consistency(ConsistencyLevel consistency) {
         this.consistency = consistency;
         return this;
@@ -168,6 +183,12 @@ public class CassandraUtilsSelect {
             sb.append(" ");
             sb.append(extra);
             sb.append(" ");
+        }
+        if (useOrderBy) {
+            sb.append(" ORDER BY ");
+            sb.append(orderByColumn);
+            sb.append(" ");
+            sb.append(orderByOrder.toString());
         }
         sb.append(" LIMIT ").append(limit == null ? CassandraConfig.LIMIT : limit);
         if (allowFiltering) {
@@ -238,5 +259,22 @@ public class CassandraUtilsSelect {
 
     public <T extends Exception> CassandraUtils check(Class<T> expectedClass, CassandraUtils.ExceptionMessage expectedMessage) {
         return parent.check(this::get, expectedClass, expectedMessage);
+    }
+
+    /**
+     * Defines possible select order for ORDER BY clause.
+     */
+    public enum Order {
+        ASC, DESC;
+
+        @Override
+        public String toString() {
+            switch (this) {
+                case ASC: return "ASC";
+                case DESC: return "DESC";
+            }
+            // Should be unreachable
+            return "";
+        }
     }
 }
