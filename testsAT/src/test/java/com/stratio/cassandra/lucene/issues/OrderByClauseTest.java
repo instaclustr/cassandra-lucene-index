@@ -1,15 +1,19 @@
 package com.stratio.cassandra.lucene.issues;
 
 import com.datastax.driver.core.Row;
+import com.datastax.driver.core.TypeCodec;
 import com.stratio.cassandra.lucene.BaseTest;
 import com.stratio.cassandra.lucene.util.CassandraUtils;
 import com.stratio.cassandra.lucene.util.CassandraUtilsSelect;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -57,6 +61,8 @@ public class OrderByClauseTest extends BaseTest {
         expectedResultOrder.add(row2);
         expectedResultOrder.add(row1);
 
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSX");
+
 //        CassandraUtils.builder("issue_18")
 //                .withPartitionKey("idcol")
 //                .withColumn("idcol", "int")
@@ -84,6 +90,7 @@ public class OrderByClauseTest extends BaseTest {
                 .createTable()
                 .createIndex()
                 .insert(row1, row2, row3, row4, row5, row6)
+                .refresh()
                 .select()
                 .andEq("id", 1)
                 .filter(wildcard("tags", "*"))
@@ -91,7 +98,11 @@ public class OrderByClauseTest extends BaseTest {
                 .orderBy("sent_at", CassandraUtilsSelect.Order.DESC)
                 .checkOrderedColumns("sent_at", expectedResultOrder
                         .stream()
-                        .map((row) -> row.get("sent_at"))
+                        .map((row) -> {
+                                String sentAt = row.get("sent_at");
+                                sentAt = sentAt.replace("'", "");
+                                return Date.from(Instant.from(formatter.parse(sentAt)));
+                        })
                         .toArray()
                 )
                 .dropKeyspace();
