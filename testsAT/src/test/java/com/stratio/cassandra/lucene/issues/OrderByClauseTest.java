@@ -1,21 +1,12 @@
 package com.stratio.cassandra.lucene.issues;
 
-import com.datastax.driver.core.Row;
-import com.datastax.driver.core.TypeCodec;
 import com.stratio.cassandra.lucene.BaseTest;
 import com.stratio.cassandra.lucene.util.CassandraUtils;
 import com.stratio.cassandra.lucene.util.CassandraUtilsSelect;
 import org.junit.jupiter.api.Test;
-
-import java.text.DateFormat;
-import java.text.ParseException;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
 import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static com.stratio.cassandra.lucene.builder.Builder.*;
 
@@ -63,21 +54,6 @@ public class OrderByClauseTest extends BaseTest {
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSX");
 
-//        CassandraUtils.builder("issue_18")
-//                .withPartitionKey("idcol")
-//                .withColumn("idcol", "int")
-//                .withColumn("testtextcol", "text", stringMapper())
-//                .withColumn("testmapcol", "map<text,text>", stringMapper())
-//                .build()
-//                .createKeyspace()
-//                .createTable()
-//                .createIndex()
-//                .insert(data1, data2, data3, data4)
-//                .refresh()
-//                .filter(match("testmapcol$attb1", "row1attb1Val"))
-//                .checkUnorderedColumns("idcol", 1)
-//                .dropTable()
-//                .dropKeyspace();
         CassandraUtils.builder("order_by_test").withTable("order_by_test_table")
                 .withIndexName("order_by_test_table_index")
                 .withColumn("id", "int", integerMapper())
@@ -107,5 +83,4 @@ public class OrderByClauseTest extends BaseTest {
                 )
                 .dropKeyspace();
     }
-
 }
