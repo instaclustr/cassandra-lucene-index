@@ -16,7 +16,7 @@ jobs:
             - m2-{{ checksum "pom.xml" }}
             - m2-
 
-      - run: mvn clean install -DoutputDirectory=/tmp/artifacts -Pdeb,rpm -Dcassandra.version=4.0.17
+      - run: mvn clean install -DoutputDirectory=/tmp/artifacts -Pdeb,rpm -Dcassandra.version=4.0.18
 
       - save_cache:
           paths:
