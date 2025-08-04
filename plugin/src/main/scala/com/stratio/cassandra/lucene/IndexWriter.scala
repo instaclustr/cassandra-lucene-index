@@ -21,6 +21,7 @@ import org.apache.cassandra.db.rows.{Row, RowIterator, UnfilteredRowIterators}
 import org.apache.cassandra.index.Index.Indexer
 import org.apache.cassandra.index.transactions.IndexTransaction
 import org.apache.cassandra.index.transactions.IndexTransaction.Type.CLEANUP
+import org.apache.cassandra.utils.FBUtilities
 import org.apache.cassandra.utils.concurrent.OpOrder
 
 /** [[Indexer]] for Lucene-based index.
@@ -73,8 +74,14 @@ abstract class IndexWriter(
 
   /** @inheritdoc */
   override def removeRow(row: Row): Unit = {
-    logger.trace(s"Remove row during $transactionType: $row")
-    tryIndex(row)
+    if (row.hasLiveData(FBUtilities.nowInSeconds,  false)) {
+      logger.trace(s"Update row during $transactionType: $row")
+      tryIndex(row)
+    }
+    else {
+      logger.trace(s"Remove row during $transactionType: $row")
+      delete()
+    }
   }
 
   /** Deletes all the partition. */

@@ -450,6 +450,20 @@ abstract class IndexService(
       queue.submitSynchronous(lucene.refresh)
   }
 
+  override def getHasDeletions: Boolean = {
+    logger.info("has deletions?")
+    lucene.getHasDeletions
+  }
+
+  override def getMaxDocs: Int = {
+    logger.info("getting max docs")
+    lucene.getMaxDocs
+  }
+
+  override def getRefCount: Int = {
+    logger.info("getting ref count")
+    lucene.getRefCount
+  }
 }
 
 /** Companion object for [[IndexService]]. */

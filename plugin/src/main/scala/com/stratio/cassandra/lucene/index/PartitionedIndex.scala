@@ -137,7 +137,7 @@ class PartitionedIndex(
     */
   def getNumDocs: Long = {
     logger.debug(s"Getting $name num docs")
-    (0L /: indexes) (_ + _.getNumDocs)
+    indexes.foldLeft(0L)(_ + _.getNumDocs)
   }
 
   /** Returns the total number of deleted documents in this index.
@@ -146,7 +146,22 @@ class PartitionedIndex(
     */
   def getNumDeletedDocs: Long = {
     logger.debug(s"Getting $name num deleted docs")
-    (0L /: indexes) (_ + _.getNumDeletedDocs)
+    indexes.foldLeft(0L)(_ + _.getNumDeletedDocs)
+  }
+
+  def getHasDeletions: Boolean = {
+    logger.debug(s"Getting $name has deletions")
+    indexes.exists(i => i.getHasDeletions)
+  }
+
+  def getMaxDocs: Int = {
+    logger.debug(s"Getting $name has max docs")
+    indexes.foldLeft(0)(_ + _.getMaxDocs)
+  }
+
+  def getRefCount: Int = {
+    logger.debug(s"Getting $name get ref count")
+    indexes.foldLeft(0)(_ + _.getRefCount)
   }
 
   /** Upserts the specified document by first deleting the documents containing the specified term
