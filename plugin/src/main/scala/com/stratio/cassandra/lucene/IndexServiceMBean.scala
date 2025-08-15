@@ -22,7 +22,7 @@ package com.stratio.cassandra.lucene
 trait IndexServiceMBean {
 
   /** Commits the pending changes. */
-  def commit()
+  def commit(): Unit
 
   /** Returns the total number of documents in this index.
     *
@@ -36,21 +36,39 @@ trait IndexServiceMBean {
     */
   def getNumDeletedDocs: Long
 
+  /**
+   * Get if it has deletions
+   * @return
+   */
+  def getHasDeletions: Boolean
+
+  /**
+   * Get max docs
+   * @return
+   */
+  def getMaxDocs: Int
+
+  /**
+   * Get ref counts
+   * @return
+   */
+  def getRefCount: Int
+
   /** Optimizes the index forcing merge segments leaving the specified number of segments. This
     * operation may block until all merging completes.
     *
     * @param maxNumSegments the maximum number of segments left in the index after merging finishes
     * @param doWait         `true` if the call should block until the operation completes
     */
-  def forceMerge(maxNumSegments: Int, doWait: Boolean)
+  def forceMerge(maxNumSegments: Int, doWait: Boolean): Unit
 
   /** Optimizes the index forcing merge of all segments that have deleted documents. This operation
     * may block until all merging completes.
     *
     * @param doWait `true` if the call should block until the operation completes
     */
-  def forceMergeDeletes(doWait: Boolean)
+  def forceMergeDeletes(doWait: Boolean): Unit
 
   /** Refreshes the index readers. */
-  def refresh()
+  def refresh(): Unit
 }

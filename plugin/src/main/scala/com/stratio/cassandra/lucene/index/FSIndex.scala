@@ -161,6 +161,18 @@ class FSIndex(
     doWithSearcher(searcher => searcher.getIndexReader.numDeletedDocs)
   }
 
+  def getHasDeletions: Boolean = {
+    doWithSearcher(searcher => searcher.getIndexReader.hasDeletions)
+  }
+
+  def getMaxDocs: Int = {
+    doWithSearcher(searcher => searcher.getIndexReader.maxDoc())
+  }
+
+  def getRefCount: Int = {
+    doWithSearcher(searcher => searcher.getIndexReader.getRefCount)
+  }
+
   /** Optimizes the index forcing merge segments leaving the specified number of segments.
     * This operation may block until all merging completes.
     *
