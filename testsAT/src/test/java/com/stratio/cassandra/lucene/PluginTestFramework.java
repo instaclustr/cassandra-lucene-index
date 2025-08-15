@@ -40,12 +40,11 @@ public abstract class PluginTestFramework {
 
                 context.getRoot().getStore(Namespace.GLOBAL).put(this.getClass().getCanonicalName(), this);
 
-                cassandra = getCassandra();
-                logger.info("Starting Cassandra");
-                cassandra.start();
-                logger.info("Cassandra started");
-
                 try {
+                    cassandra = getCassandra();
+                    logger.info("Starting Cassandra");
+                    cassandra.start();
+                    logger.info("Cassandra started");
                     logger.info("Connecting to Cassandra");
                     CassandraConnection.connect();
                 } catch (final Exception ex) {
