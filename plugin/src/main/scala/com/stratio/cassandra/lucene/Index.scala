@@ -15,14 +15,11 @@
  */
 package com.stratio.cassandra.lucene
 
-import java.util.concurrent.Callable
-import java.util.function.BiFunction
-import java.util.{Collections, Optional}
-import java.{util => java}
+import com.google.common.collect.{Lists, Sets}
 import com.stratio.cassandra.lucene.search.Search
 import com.stratio.cassandra.lucene.util.Logging
 import org.apache.cassandra.cql3.Operator
-import org.apache.cassandra.db.ColumnFamilyStore.FlushReason
+import org.apache.cassandra.db.ColumnFamilyStore.{FlushReason, RefViewFragment}
 import org.apache.cassandra.db.SinglePartitionReadCommand.Group
 import org.apache.cassandra.db._
 import org.apache.cassandra.db.compaction.CompactionManager
@@ -31,13 +28,16 @@ import org.apache.cassandra.db.lifecycle.{SSTableSet, View}
 import org.apache.cassandra.db.marshal.{AbstractType, UTF8Type}
 import org.apache.cassandra.db.partitions._
 import org.apache.cassandra.exceptions.{ConfigurationException, InvalidRequestException}
-import org.apache.cassandra.index.Index.{Indexer, Searcher}
-import org.apache.cassandra.index.internal.CollatedViewIndexBuilder
+import org.apache.cassandra.index.Index.{INDEX_BUILDER_SUPPORT, Indexer, Searcher}
 import org.apache.cassandra.index.transactions.IndexTransaction
 import org.apache.cassandra.index.{IndexRegistry, Index => CassandraIndex}
-import org.apache.cassandra.io.sstable.ReducingKeyIterator
 import org.apache.cassandra.schema.{ColumnMetadata, IndexMetadata, TableMetadata}
 import org.apache.cassandra.utils.FBUtilities
+
+import java.util.concurrent.Callable
+import java.util.function.BiFunction
+import java.util.{Collections, Optional}
+import java.{util => java}
 
 
 /** [[CassandraIndex]] that uses Apache Lucene as backend. It allows, among
@@ -55,11 +55,11 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
 
   logger.debug(s"Building Lucene index ${table.metadata} $indexMetadata")
 
-  val service = try IndexService.build(table, indexMetadata) catch {
+  val service: IndexService = try IndexService.build(table, indexMetadata) catch {
     case e: Exception => throw new IndexException(e)
   }
 
-  val name = service.qualifiedName
+  val name: String = service.qualifiedName
 
   /** Return a task to perform any initialization work when a new index instance is created. This
     * may involve costly operations such as (re)building the index, and is performed asynchronously
@@ -72,40 +72,37 @@ class Index(table: ColumnFamilyStore, indexMetadata: IndexMetadata)
       return null
     }
 
-    getBuildIndexTask()
-  }
+    () => {
+      table.forceBlockingFlush(FlushReason.INDEX_BUILD_STARTED)
+      val viewFragment: RefViewFragment = table.selectAndReference(View.selectFunction(SSTableSet.CANONICAL))
 
-  private[this] def getBuildIndexTask(): Callable[Unit] =
-    new Callable[Unit] {
-      override def call(): Unit = {
-        table.forceBlockingFlush(FlushReason.INDEX_BUILD_STARTED)
+      try {
+        logger.info("Submitting index build of {}", indexMetadata.name)
+        FBUtilities.waitOnFuture(
+          CompactionManager.instance.submitIndexBuild(
+            INDEX_BUILDER_SUPPORT.getIndexBuildTask(
+              table,
+              Sets.newHashSet(this),
+              Lists.newArrayList(viewFragment.refs.iterator()))))
 
-        try {
-          val viewFragment = table.selectAndReference(View.selectFunction(SSTableSet.CANONICAL))
-          val sstables = viewFragment.refs
+        logger.info(String.format("Index build of index '%s' on table '%s.%s' completed",
+          indexMetadata.name,
+          table.keyspace.getName,
+          table.name))
+      } catch {
+        case ex: Throwable =>
+          logger.error(String.format("Index build of index '%s' on table '%s.%s' has failed",
+            indexMetadata.name,
+            table.keyspace.getName,
+            table.name),
+            ex)
 
-          try {
-            if (sstables.isEmpty) {
-              logger.info("No SSTable data for {}.{} to build index {} from, marking empty index as built",
-                          table.metadata.keyspace, table.metadata.name, indexMetadata.name)
-              return
-            }
-            logger.info("Submitting index build of {}", table.name)
-            val builder = new CollatedViewIndexBuilder(table,
-                                                       Collections.singleton(Index.this),
-                                                       new ReducingKeyIterator(sstables),
-                                                       java.Collections.unmodifiableCollection(sstables))
-
-            val future = CompactionManager.instance.submitIndexBuild(builder)
-            FBUtilities.waitOnFuture(future)
-          } finally {
-            if (viewFragment != null) viewFragment.close()
-            if (sstables != null) sstables.close()
-          }
-        }
-        logger.info("Index build of {} complete", indexMetadata.name)
+          throw ex;
+      } finally {
+        if (viewFragment != null) viewFragment.close()
       }
     }
+  }
 
   private def isBuilt = SystemKeyspace.isIndexBuilt(table.keyspace.getName, indexMetadata.name)
 
