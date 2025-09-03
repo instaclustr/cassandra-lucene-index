@@ -94,7 +94,7 @@
     </distributionManagement>
     
     <properties>
-        <cassandra.version>4.1.10-SNAPSHOT</cassandra.version>
+        <cassandra.version>4.1.10</cassandra.version>
         
         <jackson.core.version>2.13.2</jackson.core.version>
         <jackson.databind.version>2.13.2.2</jackson.databind.version>
