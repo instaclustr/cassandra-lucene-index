@@ -96,8 +96,8 @@
     <properties>
         <cassandra.version>4.1.11</cassandra.version>
         
-        <jackson.core.version>2.13.2</jackson.core.version>
-        <jackson.databind.version>2.13.2.2</jackson.databind.version>
+        <jackson.core.version>2.18.6</jackson.core.version>
+        <jackson.databind.version>2.18.6</jackson.databind.version>
         <jacoco-IT-argline></jacoco-IT-argline>
         <jts.version>1.14.0</jts.version>
         <lucene.version>5.5.4</lucene.version>
