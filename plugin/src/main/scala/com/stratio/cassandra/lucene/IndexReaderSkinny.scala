@@ -37,22 +37,17 @@ class IndexReaderSkinny(
 
   /** @inheritdoc */
   override protected def prepareNext(): Boolean = {
-    while (nextData.isEmpty && documents.hasNext) {
+    if (nextData.isEmpty && documents.hasNext) {
       val nextDoc = documents.next
       val key = service.decoratedKey(nextDoc._1)
       val filter = command.clusteringIndexFilter(key)
-      val data = read(key, filter)
-      // If the Lucene hit maps to a row that no longer exists in the base table (an orphaned
-      // index document, e.g. after a delete whose SSTables have been compacted away), the read
-      // returns an empty partition. It must be closed and SKIPPED, not returned: handing an empty
-      // partition to the read pipeline makes Cassandra's CheckForAbort transformation attach to a
-      // second BaseRows, which throws IllegalArgumentException and surfaces as ReadFailure(1300).
-      // IndexReaderWide already skips empty partitions; this keeps the skinny reader consistent.
-      if (data.isEmpty) {
-        data.close()
-      } else {
-        nextData = Some(data)
-      }
+      // read() returns a lazily-initialized partition (see IndexReader.read): do NOT call isEmpty
+      // here. isEmpty would force the partition open during hasNext()/prepareNext() look-ahead, so
+      // two partitions would be open at once and Cassandra's single CheckForAbort would attach to a
+      // second BaseRows and fail (ReadFailure 1300). Empty (orphaned) partitions are harmless when
+      // produced lazily: core opens, finds no rows, closes them (firing onPartitionClose) and moves
+      // on, exactly as it does for empty partitions in a normal range scan.
+      nextData = Some(read(key, filter))
     }
     nextData.isDefined
   }

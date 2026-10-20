@@ -79,13 +79,13 @@ class IndexReaderWide(
     if (clusterings.isEmpty) return prepareNext()
 
     val filter = new ClusteringIndexNamesFilter(clusterings, command.isReversed)
+    // read() returns a lazily-initialized partition (see IndexReader.read): do NOT call isEmpty
+    // here. isEmpty would force the partition open during hasNext()/prepareNext() look-ahead, so
+    // two partitions would be open at once and Cassandra's single CheckForAbort would attach to a
+    // second BaseRows and fail (ReadFailure 1300). Empty (orphaned) partitions are harmless when
+    // produced lazily: core opens, finds no rows, closes them (firing onPartitionClose) and moves
+    // on, exactly as it does for empty partitions in a normal range scan.
     nextData = Some(read(key, filter))
-
-    nextData.foreach(
-      data => if (data.isEmpty) {
-        data.close()
-        return prepareNext()
-      })
 
     true
   }
