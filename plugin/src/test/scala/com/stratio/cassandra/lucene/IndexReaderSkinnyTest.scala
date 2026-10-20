@@ -50,50 +50,89 @@ class IndexReaderSkinnyTest extends BaseScalaTest {
       results.dequeue()
   }
 
-  private def partition(empty: Boolean): UnfilteredRowIterator = {
-    val it = mock(classOf[UnfilteredRowIterator])
-    when(it.isEmpty).thenReturn(empty)
-    it
+  /** A partition mock that records whether it was touched in any way that would force a real
+    * (lazy) partition to initialize: isEmpty / hasNext / next / staticRow / partitionLevelDeletion. */
+  private def untouchablePartition(): UnfilteredRowIterator = mock(classOf[UnfilteredRowIterator])
+
+  private def verifyNotInitialized(p: UnfilteredRowIterator): Unit = {
+    verify(p, never()).isEmpty
+    verify(p, never()).hasNext
+    verify(p, never()).staticRow()
+    verify(p, never()).partitionLevelDeletion()
   }
 
   private def hit: (Document, ScoreDoc) = (new Document, new ScoreDoc(0, 1.0f))
 
-  test("prepareNext skips and closes empty (orphaned) partitions and returns the live one") {
-    val documents = mock(classOf[DocumentIterator])
-    when(documents.hasNext).thenReturn(true, true, true, false)
-    when(documents.next).thenReturn(hit, hit, hit)
-
-    val empty1 = partition(empty = true)
-    val empty2 = partition(empty = true)
-    val live = partition(empty = false)
-
-    val reader = new TestReader(
-      mock(classOf[IndexServiceSkinny]),
-      mock(classOf[ReadCommand]),
-      documents,
-      mutable.Queue(empty1, empty2, live))
-
-    reader.hasNext shouldBe true         // there IS a live result to return
-    reader.next shouldBe live            // and it is the live partition, not an empty one
-    verify(empty1).close()               // both orphaned partitions were closed ...
-    verify(empty2).close()
-    verify(live, never()).close()        // ... and the live one was not closed while preparing
-  }
-
-  test("prepareNext returns false when every hit is an empty (orphaned) partition") {
+  test("prepareNext does NOT initialize/inspect the partition during look-ahead") {
+    // The partition must be produced but never touched (no isEmpty/hasNext/close), so a real lazy
+    // partition stays uninitialized until Cassandra consumes it -- keeping one partition open at a time.
     val documents = mock(classOf[DocumentIterator])
     when(documents.hasNext).thenReturn(true, false)
     when(documents.next).thenReturn(hit)
 
-    val empty = partition(empty = true)
+    val p = untouchablePartition()
 
     val reader = new TestReader(
       mock(classOf[IndexServiceSkinny]),
       mock(classOf[ReadCommand]),
       documents,
-      mutable.Queue(empty))
+      mutable.Queue(p))
 
-    reader.hasNext shouldBe false        // nothing to return
-    verify(empty).close()                // the orphaned partition was closed
+    reader.hasNext shouldBe true     // a hit exists
+    reader.next shouldBe p           // the exact partition is returned, untouched
+    verifyNotInitialized(p)          // look-ahead never forced it open or closed it
+  }
+
+  test("empty (orphaned) partitions are returned lazily, not skipped or closed during look-ahead") {
+    // With lazy reads we no longer special-case empty partitions: core opens, finds nothing, and
+    // closes them itself. The reader must not call isEmpty/close on them while preparing.
+    val documents = mock(classOf[DocumentIterator])
+    when(documents.hasNext).thenReturn(true, false)
+    when(documents.next).thenReturn(hit)
+
+    val p = untouchablePartition()
+
+    val reader = new TestReader(
+      mock(classOf[IndexServiceSkinny]),
+      mock(classOf[ReadCommand]),
+      documents,
+      mutable.Queue(p))
+
+    reader.hasNext shouldBe true
+    reader.next shouldBe p
+    verify(p, never()).isEmpty       // not inspected
+    verify(p, never()).close()       // not closed by the reader during preparation
+  }
+
+  test("prepareNext returns false when there are no hits") {
+    val documents = mock(classOf[DocumentIterator])
+    when(documents.hasNext).thenReturn(false)
+
+    val reader = new TestReader(
+      mock(classOf[IndexServiceSkinny]),
+      mock(classOf[ReadCommand]),
+      documents,
+      mutable.Queue())
+
+    reader.hasNext shouldBe false
+  }
+
+  test("close closes the prepared-but-not-yet-returned partition and the document iterator") {
+    val documents = mock(classOf[DocumentIterator])
+    when(documents.hasNext).thenReturn(true, false)
+    when(documents.next).thenReturn(hit)
+
+    val prepared = untouchablePartition()
+
+    val reader = new TestReader(
+      mock(classOf[IndexServiceSkinny]),
+      mock(classOf[ReadCommand]),
+      documents,
+      mutable.Queue(prepared))
+
+    reader.hasNext shouldBe true     // prepares `prepared` into nextData
+    reader.close()
+    verify(prepared).close()         // the pending partition is released ...
+    verify(documents).close()        // ... and so is the document iterator
   }
 }
