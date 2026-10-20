@@ -72,14 +72,32 @@ abstract class IndexReader(
   protected def prepareNext(): Boolean
 
   protected def read(key: DecoratedKey, filter: ClusteringIndexFilter): UnfilteredRowIterator = {
-    SinglePartitionReadCommand.create(
-      metadataVal,
-      command.nowInSec,
-      command.columnFilter,
-      command.rowFilter,
-      command.limits,
-      key,
-      filter).queryMemtableAndDisk(table, controller)
+    // Return a LAZY partition iterator: defer the actual SinglePartitionReadCommand execution
+    // (queryMemtableAndDisk) until Cassandra first consumes this partition's rows/metadata.
+    //
+    // Why this matters: Cassandra wraps the whole IndexReader with a single CheckForAbort
+    // StoppingTransformation (via ReadCommand.withStateTracking). That transformation may be
+    // attached to only one partition's BaseRows at a time; its onPartitionClose() resets the
+    // reference, and the response serializer closes partition N before it calls hasNext()/next()
+    // for partition N+1. Core's own range scans rely on each partition being opened lazily, one at
+    // a time, so partition N's BaseRows wrapper is always closed before N+1 is attached.
+    //
+    // The skinny/wide readers call read() from prepareNext() during hasNext(), i.e. they look ahead
+    // and would eagerly OPEN partition N+1 while N is still open -- making CheckForAbort attach to a
+    // second BaseRows and throw "Attempted to attach 2nd different BaseRows in StoppingTransformation"
+    // (surfacing as ReadFailure 1300), notably on COUNT(*) and full scans that never stop early.
+    // Deferring the real read until consumption keeps exactly one partition open at a time.
+    new LazilyInitializedUnfilteredRowIterator(key) {
+      override protected def initializeIterator(): UnfilteredRowIterator =
+        SinglePartitionReadCommand.create(
+          metadataVal,
+          command.nowInSec,
+          command.columnFilter,
+          command.rowFilter,
+          command.limits,
+          key,
+          filter).queryMemtableAndDisk(table, controller)
+    }
   }
 
 
