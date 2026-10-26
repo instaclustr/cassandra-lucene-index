@@ -20,6 +20,7 @@ import org.apache.cassandra.db._
 import org.apache.cassandra.db.filter.ClusteringIndexFilter
 import org.apache.cassandra.db.partitions.UnfilteredPartitionIterator
 import org.apache.cassandra.db.rows.UnfilteredRowIterator
+import org.apache.cassandra.db.rows.LazilyInitializedUnfilteredRowIterator
 import org.apache.cassandra.schema.TableMetadata
 
 /** [[UnfilteredPartitionIterator]] for retrieving rows from a [[DocumentIterator]].
